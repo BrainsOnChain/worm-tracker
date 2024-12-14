@@ -39,8 +39,7 @@ func main() {
 		serverErr <- server.Start()
 	}()
 
-	err = <-serverErr
-	if err != nil {
+	if err = <-serverErr; err != nil {
 		log.Sugar().Fatalf("error starting server: %v", err)
 	}
 }
