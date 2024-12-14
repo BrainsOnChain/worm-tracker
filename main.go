@@ -4,6 +4,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/brainsonchain/worm-tracker/hyperliquid"
 	"github.com/brainsonchain/worm-tracker/server"
 )
 
@@ -21,6 +22,10 @@ func main() {
 	}
 	zap.ReplaceGlobals(log)
 	log.Info("logger initialized")
+
+	// -------------------------------------------------------------------------
+	// Test Block Fetcher
+	hyperliquid.Fetch()
 
 	// -------------------------------------------------------------------------
 	// Start the server
