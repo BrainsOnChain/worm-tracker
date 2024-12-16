@@ -26,6 +26,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Test Block Fetcher
 	hyperliquid.Fetch()
+	hyperliquid.FollowChainWithPolling()
 
 	// -------------------------------------------------------------------------
 	// Start the server
