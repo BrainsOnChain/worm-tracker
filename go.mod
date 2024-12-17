@@ -6,6 +6,7 @@ require (
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/go-chi/chi v1.5.5
 	github.com/go-chi/chi/v5 v5.1.0
+	github.com/mattn/go-sqlite3 v1.14.24
 	go.uber.org/zap v1.27.0
 )
 

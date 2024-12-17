@@ -1,11 +1,12 @@
 package main
 
 import (
+	"fmt"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/brainsonchain/worm-tracker/hyperliquid"
-	"github.com/brainsonchain/worm-tracker/server"
+	"github.com/brainsonchain/worm-tracker/src"
 )
 
 func main() {
@@ -23,10 +24,31 @@ func main() {
 	zap.ReplaceGlobals(log)
 	log.Info("logger initialized")
 
+	if err := run(log); err != nil {
+		log.Sugar().Fatalf("error running application: %v", err)
+	}
+}
+
+func run(log *zap.Logger) error {
+
+	// -------------------------------------------------------------------------
+	// Initialize the database
+	log.Info("initializing database")
+
+	db, err := src.NewDBManager("/path/to/your/database.db")
+	if err != nil {
+		return fmt.Errorf("error initializing database: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.CreatePositionsTable(); err != nil {
+		return fmt.Errorf("error creating positions table: %w", err)
+	}
+
 	// -------------------------------------------------------------------------
 	// Test Block Fetcher
-	hyperliquid.Fetch()
-	hyperliquid.FollowChainWithPolling()
+	src.Fetch()
+	src.FollowChainWithPolling()
 
 	// -------------------------------------------------------------------------
 	// Start the server
@@ -36,11 +58,13 @@ func main() {
 
 	// Start the server
 	go func() {
-		server := server.NewServer(log, "8080")
+		server := src.NewServer(log, "8080")
 		serverErr <- server.Start()
 	}()
 
 	if err = <-serverErr; err != nil {
 		log.Sugar().Fatalf("error starting server: %v", err)
 	}
+
+	return nil
 }
