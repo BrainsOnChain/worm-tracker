@@ -5,8 +5,9 @@ import (
 	"time"
 )
 
-type Position struct {
-	ID        string    `json:"id"`
+type position struct {
+	ID        int       `json:"id"` // set by the DB
+	block     int       `json:"-"`  // the associated block number that contained the muscle movements
 	X         float64   `json:"x"`
 	Y         float64   `json:"y"`
 	Direction float64   `json:"direction"`
@@ -14,29 +15,34 @@ type Position struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func (p *Position) update(angle, magnitude float64) (float64, float64) {
-	p.Direction += angle
-	if p.Direction < 0 {
-		p.Direction += 360
-	} else if p.Direction >= 360 {
-		p.Direction -= 360
+// updatePosition takes the contract data and the current position to create a
+// new position object.
+func updatePosition(c contractData, cp position) position {
+
+	angle := (c.rightMuscle - c.leftMuscle) / 2
+	magnitude := (c.rightMuscle + c.leftMuscle) / 2
+
+	newDirection := cp.Direction + angle
+	if newDirection < 0 {
+		newDirection += 360
+	} else if newDirection >= 360 {
+		newDirection -= 360
 	}
 
-	dX, dY := magnitude*math.Cos(p.Direction*math.Pi/180), magnitude*math.Sin(p.Direction*math.Pi/180)
+	dX := magnitude * math.Cos(cp.Direction*math.Pi/180)
+	dY := magnitude * math.Sin(cp.Direction*math.Pi/180)
 
-	// Update the position based on the Direction
-	p.X += dX
-	p.Y += dY
+	newX := cp.X + dX
+	newY := cp.Y + dY
 
-	return dX, dY
-}
+	np := position{
+		block:     c.block,
+		X:         newX,
+		Y:         newY,
+		Direction: newDirection,
+		Price:     c.price,
+		Timestamp: c.ts,
+	}
 
-// movement outputs the movement in the form of angle and magnitude based on the
-// left and right muscle activity.
-func movement(left, right float64) (float64, float64) {
-	// Calculate the angle and magnitude
-	angle := (right - left) / 2
-	magnitude := (right + left) / 2
-
-	return angle, magnitude
+	return np
 }

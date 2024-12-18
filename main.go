@@ -35,7 +35,7 @@ func run(log *zap.Logger) error {
 	// Initialize the database
 	log.Info("initializing database")
 
-	db, err := src.NewDBManager("/path/to/your/database.db")
+	db, err := src.NewDBManager("database.db")
 	if err != nil {
 		return fmt.Errorf("error initializing database: %w", err)
 	}
@@ -46,9 +46,9 @@ func run(log *zap.Logger) error {
 	}
 
 	// -------------------------------------------------------------------------
-	// Test Block Fetcher
-	src.Fetch()
-	src.FollowChainWithPolling()
+	// Run the fetcher
+
+	go src.Run(db)
 
 	// -------------------------------------------------------------------------
 	// Start the server
@@ -58,7 +58,7 @@ func run(log *zap.Logger) error {
 
 	// Start the server
 	go func() {
-		server := src.NewServer(log, "8080")
+		server := src.NewServer(log, "8080", db)
 		serverErr <- server.Start()
 	}()
 

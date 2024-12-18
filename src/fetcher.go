@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -13,39 +14,88 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"go.uber.org/zap"
 )
 
-//go:embed abi.json
-var abiStr string
+const (
+	hypeAPI = "https://api.hyperliquid-testnet.xyz/evm"
+)
 
-func Fetch() {
-	// Connect to Hyperliquid or any Ethereum-compatible blockchain
-	client, err := ethclient.Dial("https://api.hyperliquid-testnet.xyz/evm")
-	if err != nil {
-		log.Fatalf("Failed to connect to the Ethereum client: %v", err)
-	}
+var (
+	//go:embed abi.json
+	abiStr string
 
 	// Contract address
-	contractAddress := common.HexToAddress("0x7A129762332B8f4c6Ed4850c17B218C89e78854d")
+	contractAddress = common.HexToAddress("0x7A129762332B8f4c6Ed4850c17B218C89e78854d")
+)
 
-	// Filter query
-	query := ethereum.FilterQuery{
-		FromBlock: big.NewInt(13284970), // Specify block range
-		ToBlock:   big.NewInt(13284974),
-		Addresses: []common.Address{contractAddress},
-	}
+type contractData struct {
+	block       int
+	leftMuscle  int64
+	rightMuscle int64
+	price       float64
+	ts          time.Time
+}
 
-	// Fetch logs
-	logs, err := client.FilterLogs(context.Background(), query)
+type blockFetcher struct {
+	log    *zap.Logger
+	client *ethclient.Client
+	abi    abi.ABI
+}
+
+func NewBlockFetcher(log *zap.Logger) (*blockFetcher, error) {
+	// Connect to Hyperliquid or any Ethereum-compatible blockchain
+	client, err := ethclient.Dial(hypeAPI)
 	if err != nil {
-		log.Fatalf("Failed to fetch logs: %v", err)
+		return nil, fmt.Errorf("error connecting to hype client: %w", err)
 	}
 
 	// ABI parsing
 	contractAbi, err := abi.JSON(strings.NewReader(abiStr))
 	if err != nil {
-		log.Fatalf("Failed to parse contract ABI: %v", err)
+		return nil, fmt.Errorf("failed to parse contract ABI: %w", err)
 	}
+
+	return &blockFetcher{
+		log:    log,
+		client: client,
+		abi:    contractAbi,
+	}, nil
+}
+
+func (bf *blockFetcher) MockFetch(startBlock int) error {
+	// get the latest block
+	latestBlock, err := bf.getLatestBlock()
+	if err != nil {
+		return err
+	}
+
+	// Split the block range into chunks of X
+	blocksToFetch := latestBlock - startBlock
+
+	return contractData{
+		block:       rand.Int(),
+		leftMuscle:  int64(rand.Intn(100)),
+		rightMuscle: int64(rand.Intn(100)),
+		price:       rand.Float64(),
+		ts:          time.Now(),
+	}, nil
+}
+
+func (bf *blockFetcher) fetch(from, to int64) ([]contractData, error) {
+	query := ethereum.FilterQuery{
+		FromBlock: big.NewInt(from),
+		ToBlock:   big.NewInt(to),
+		Addresses: []common.Address{contractAddress},
+	}
+
+	// Fetch logs
+	logs, err := bf.client.FilterLogs(context.Background(), query)
+	if err != nil {
+		log.Fatalf("Failed to fetch logs: %v", err)
+	}
+
+	cds := make([]contractData, 0, len(logs))
 
 	// Decode logs
 	for _, vLog := range logs {
@@ -54,95 +104,43 @@ func Fetch() {
 			DeltaY            *big.Int
 			LeftMuscle        *big.Int
 			RightMuscle       *big.Int
-			PositionTimestamp *big.Int
-			PositionPrice     *big.Int
+			PositionTimestamp *big.Int   // timestamp is int?
+			PositionPrice     *big.Float // float or int?
 		}{}
 
-		err := contractAbi.UnpackIntoInterface(&event, "WormStateUpdated", vLog.Data)
-		if err != nil {
-			log.Fatalf("Failed to unpack log data: %v", err)
+		if err := bf.abi.UnpackIntoInterface(&event, "WormStateUpdated", vLog.Data); err != nil {
+			return nil, fmt.Errorf("Failed to unpack log data: %w", err)
 		}
 
-		fmt.Printf("Event Data: %v %+v\n", vLog.BlockNumber, event)
-	}
-}
+		bigFloatToFloat := func(f *big.Float) float64 {
+			fl, _ := f.Float64()
+			return fl
+		}
 
-func FollowChainWithPolling() {
-	// Connect to the Ethereum-compatible blockchain
-	client, err := ethclient.Dial("https://api.hyperliquid-testnet.xyz/evm")
-	if err != nil {
-		log.Fatalf("Failed to connect to the Ethereum client: %v", err)
-	}
+		cd := contractData{
+			block:       int(vLog.BlockNumber),
+			leftMuscle:  event.LeftMuscle.Int64(),
+			rightMuscle: event.RightMuscle.Int64(),
+			price:       bigFloatToFloat(event.PositionPrice),
+			// timestamp TODO
+		}
 
-	// Contract address
-	contractAddress := common.HexToAddress("0x7A129762332B8f4c6Ed4850c17B218C89e78854d")
-
-	// Parse contract ABI
-	contractAbi, err := abi.JSON(strings.NewReader(abiStr))
-	if err != nil {
-		log.Fatalf("Failed to parse contract ABI: %v", err)
-	}
-
-	// Start block
-	var lastBlock uint64 = 13554153 // Start from a known block
-	fmt.Println("Starting block:", lastBlock)
-
-	// Polling loop
-	for {
-		// Get the latest block number
-		header, err := client.HeaderByNumber(context.Background(), nil)
-		if err != nil {
-			log.Printf("Failed to fetch latest block: %v", err)
-			time.Sleep(5 * time.Second) // Retry after delay
+		if cd.leftMuscle == 0 && cd.rightMuscle == 0 {
+			bf.log.Warn("zero muscle movements")
 			continue
 		}
-		latestBlock := header.Number.Uint64()
 
-		// Check for new blocks
-		if latestBlock > lastBlock {
-			fmt.Printf("Fetching logs from blocks %d to %d...\n", lastBlock+1, latestBlock)
-
-			// Define filter query
-			query := ethereum.FilterQuery{
-				FromBlock: big.NewInt(int64(lastBlock + 1)),
-				ToBlock:   big.NewInt(int64(latestBlock)),
-				Addresses: []common.Address{contractAddress},
-			}
-
-			// Fetch logs
-			logs, err := client.FilterLogs(context.Background(), query)
-			if err != nil {
-				log.Printf("Failed to fetch logs: %v", err)
-				time.Sleep(5 * time.Second) // Retry after delay
-				continue
-			}
-
-			fmt.Println("logs:", len(logs))
-			// Process logs
-			for _, vLog := range logs {
-				event := struct {
-					DeltaX            *big.Int
-					DeltaY            *big.Int
-					LeftMuscle        *big.Int
-					RightMuscle       *big.Int
-					PositionTimestamp *big.Int
-					PositionPrice     *big.Int
-				}{}
-
-				err := contractAbi.UnpackIntoInterface(&event, "WormStateUpdated", vLog.Data)
-				if err != nil {
-					log.Printf("Failed to unpack log data: %v", err)
-					continue
-				}
-
-				fmt.Printf("New Event - Block: %d, Data: %+v\n", vLog.BlockNumber, event)
-			}
-
-			// Update last processed block
-			lastBlock = latestBlock
-		}
-
-		// Wait for a short interval before polling again
-		time.Sleep(5 * time.Second)
+		cds = append(cds, cd)
 	}
+
+	return cds, nil
+}
+
+func (bf *blockFetcher) getLatestBlock() (int, error) {
+	header, err := bf.client.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch latest block: %w", err)
+	}
+
+	return int(header.Number.Uint64()), nil
 }

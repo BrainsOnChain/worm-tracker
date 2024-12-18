@@ -1,2 +1,5 @@
 .vscode
 .DS_Store
+
+# SQLite DB
+database.db

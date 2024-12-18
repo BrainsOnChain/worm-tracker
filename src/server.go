@@ -17,11 +17,12 @@ type server struct {
 	db     *dbManager
 }
 
-func NewServer(log *zap.Logger, port string) *server {
+func NewServer(log *zap.Logger, port string, db *dbManager) *server {
 	return &server{
 		log:    log,
 		port:   port,
 		router: chi.NewRouter(),
+		db:     db,
 	}
 }
 
@@ -36,7 +37,6 @@ func (s *server) Start() error {
 
 	// This route serves the HTML file in app/ui.html
 	s.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		// w.Write([]byte("Hello, World!"))
 		http.ServeFile(w, r, "app/ui.html")
 	})
 
@@ -53,13 +53,14 @@ func (s *server) getWormPositions(w http.ResponseWriter, r *http.Request) {
 	// Parse the ?id= query parameter from the URL
 	idStr := r.URL.Query().Get("id")
 	id, err := strconv.Atoi(idStr)
-	if err != nil {
+	if err != nil || id < 0 {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
 	positions, err := s.db.fetchPositions(id)
 	if err != nil {
+		s.log.Error("failed to fetch positions", zap.Error(err))
 		http.Error(w, "failed to fetch positions", http.StatusInternalServerError)
 		return
 	}

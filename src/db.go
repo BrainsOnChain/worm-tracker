@@ -23,12 +23,12 @@ func NewDBManager(dataSourceName string) (*dbManager, error) {
 func (db *dbManager) CreatePositionsTable() error {
 	query := /* sql */ `
 		CREATE TABLE IF NOT EXISTS positions (
-			id SERIAL PRIMARY KEY,
-			x FLOAT NOT NULL,
-			y FLOAT NOT NULL,
+			id        SERIAL PRIMARY KEY,
+			x         FLOAT NOT NULL,
+			y         FLOAT NOT NULL,
 			direction FLOAT NOT NULL,
-			price FLOAT NOT NULL,
-			timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			price     FLOAT NOT NULL,
+			ts        TIMESTAMP NOT NULL
 		);`
 
 	if _, err := db.db.Exec(query); err != nil {
@@ -38,30 +38,34 @@ func (db *dbManager) CreatePositionsTable() error {
 	return nil
 }
 
-func (db *dbManager) savePosition(id int, position string) error {
-	stmt, err := db.db.Prepare("INSERT INTO positions(id, position) VALUES(?, ?)")
+func (db *dbManager) savePosition(p position) error {
+	const q = /* sql */ `
+		INSERT INTO positions
+			(x, y, direction, price, ts)
+		VALUES
+			(?, ?, ?, ?, ?)
+	`
+
+	stmt, err := db.db.Prepare(q)
 	if err != nil {
-		return err
+		return fmt.Errorf("error preparing insert stmt: %w", err)
 	}
-	_, err = stmt.Exec(id, position)
-	if err != nil {
-		return err
+
+	if _, err = stmt.Exec(p.X, p.Y, p.Direction, p.Price, p.Timestamp); err != nil {
+		return fmt.Errorf("error executing position insert: %w", err)
 	}
+
 	return nil
 }
 
-func (db *dbManager) fetchPositions(id int) ([]Position, error) {
+func (db *dbManager) fetchPositions(id int) ([]position, error) {
 	const q = /* sql */ `
 		SELECT
-			id,
-			x,
-			y,
-			direction,
-			price,
-			timestamp
+			id, x, y, direction, price, ts
 		FROM
 			positions
-		WHERE id > ?;
+		WHERE id > ?
+		ORDER BY id DESC;
 	`
 
 	rows, err := db.db.Query(q, id)
@@ -70,9 +74,9 @@ func (db *dbManager) fetchPositions(id int) ([]Position, error) {
 	}
 	defer rows.Close()
 
-	positions := make([]Position, 0)
+	positions := make([]position, 0)
 	for rows.Next() {
-		var p Position
+		var p position
 		if err := rows.Scan(&p.ID, &p.X, &p.Y, &p.Direction, &p.Price, &p.Timestamp); err != nil {
 			return nil, err
 		}
