@@ -23,7 +23,7 @@ func NewDBManager(dataSourceName string) (*dbManager, error) {
 func (db *dbManager) CreatePositionsTable() error {
 	query := /* sql */ `
 		CREATE TABLE IF NOT EXISTS positions (
-			id        SERIAL PRIMARY KEY,
+			id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			x         FLOAT NOT NULL,
 			y         FLOAT NOT NULL,
 			direction FLOAT NOT NULL,

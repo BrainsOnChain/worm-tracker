@@ -63,16 +63,7 @@ func NewBlockFetcher(log *zap.Logger) (*blockFetcher, error) {
 	}, nil
 }
 
-func (bf *blockFetcher) MockFetch(startBlock int) error {
-	// get the latest block
-	latestBlock, err := bf.getLatestBlock()
-	if err != nil {
-		return err
-	}
-
-	// Split the block range into chunks of X
-	blocksToFetch := latestBlock - startBlock
-
+func (bf *blockFetcher) MockFetch(startBlock int) (contractData, error) {
 	return contractData{
 		block:       rand.Int(),
 		leftMuscle:  int64(rand.Intn(100)),
@@ -80,6 +71,16 @@ func (bf *blockFetcher) MockFetch(startBlock int) error {
 		price:       rand.Float64(),
 		ts:          time.Now(),
 	}, nil
+}
+
+func (bf *blockFetcher) Fetch(startBlock int) error {
+	// get the latest block
+	_, err := bf.getLatestBlock()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (bf *blockFetcher) fetch(from, to int64) ([]contractData, error) {

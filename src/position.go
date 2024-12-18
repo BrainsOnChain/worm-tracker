@@ -19,8 +19,8 @@ type position struct {
 // new position object.
 func updatePosition(c contractData, cp position) position {
 
-	angle := (c.rightMuscle - c.leftMuscle) / 2
-	magnitude := (c.rightMuscle + c.leftMuscle) / 2
+	angle := float64(c.rightMuscle-c.leftMuscle) / 2
+	magnitude := float64(c.rightMuscle+c.leftMuscle) / 2
 
 	newDirection := cp.Direction + angle
 	if newDirection < 0 {

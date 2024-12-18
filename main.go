@@ -46,9 +46,15 @@ func run(log *zap.Logger) error {
 	}
 
 	// -------------------------------------------------------------------------
-	// Run the fetcher
+	// Initialize the fetcher
+	log.Info("initializing fetcher")
 
-	go src.Run(db)
+	fetcher, err := src.NewBlockFetcher(log)
+	if err != nil {
+		return fmt.Errorf("error initializing fetcher: %w", err)
+	}
+
+	go src.Run(fetcher, db)
 
 	// -------------------------------------------------------------------------
 	// Start the server
