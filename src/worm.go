@@ -2,6 +2,10 @@ package src
 
 import (
 	"fmt"
+	"os"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 func Run(fetcher *blockFetcher, db *dbManager) error {
@@ -13,8 +17,26 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 		return fmt.Errorf("error getting last block: %w", err)
 	}
 
-	fmt.Println("latest position", p)
-	go fetcher.fetch(valueCh, p.block)
+	dryRun := os.Getenv("DRY_RUN")
+	if dryRun == "true" {
+		zap.L().Info("starting fetcher in dry-run mode")
+
+		go func() {
+			for {
+				cd, err := fetcher.MockFetch(0)
+				if err != nil {
+					fmt.Println(err)
+				}
+				valueCh <- cd
+				time.Sleep(5 * time.Second)
+			}
+		}()
+
+	} else {
+		zap.L().Info("starting fetcher in live mode")
+
+		go fetcher.fetch(valueCh, p.block)
+	}
 
 	for {
 		select {

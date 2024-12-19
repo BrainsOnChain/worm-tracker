@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"os"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -32,10 +35,22 @@ func main() {
 func run(log *zap.Logger) error {
 
 	// -------------------------------------------------------------------------
+	// Prometheus Metrics
+	log.Info("initializing prometheus metrics")
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":9091", nil)
+
+	// -------------------------------------------------------------------------
 	// Initialize the database
 	log.Info("initializing database")
 
-	db, err := src.NewDBManager("database.db")
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./worm-tracker.sqlite" // Fallback for local
+	}
+
+	db, err := src.NewDBManager(dbPath)
 	if err != nil {
 		return fmt.Errorf("error initializing database: %w", err)
 	}
@@ -51,6 +66,7 @@ func run(log *zap.Logger) error {
 
 	wormErr := make(chan error)
 	serverErr := make(chan error)
+
 	// -------------------------------------------------------------------------
 	// Start the fetcher
 	log.Info("starting fetcher")

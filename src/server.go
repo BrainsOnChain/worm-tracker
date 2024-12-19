@@ -33,6 +33,14 @@ func (s *server) Start() error {
 	)
 
 	// -------------------------------------------------------------------------
+	// Health Route
+
+	s.router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	// -------------------------------------------------------------------------
 	// App Route
 
 	// This route serves the HTML file in app/ui.html
@@ -53,7 +61,7 @@ func (s *server) getWormPositions(w http.ResponseWriter, r *http.Request) {
 	// Parse the ?id= query parameter from the URL
 	idStr := r.URL.Query().Get("id")
 	id, err := strconv.Atoi(idStr)
-	if err != nil || id < 0 {
+	if err != nil || id < -1 {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
