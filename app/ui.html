@@ -151,8 +151,10 @@
                     tooltip.style.display = 'block';
                     tooltip.style.left = `${event.clientX + 10}px`;
                     tooltip.style.top = `${event.clientY + 10}px`;
-                    tooltip.innerHTML = `X: ${closestPoint.pos.x.toFixed(0)} Y: ${closestPoint.pos.y.toFixed(0)} Dir: ${closestPoint.pos.direction.toFixed(0)}°
-Price: $${closestPoint.pos.priceInfo.priceUSD.toFixed(4)} (${closestPoint.pos.priceInfo.changeUSD >= 0 ? '+' : ''}${closestPoint.pos.priceInfo.changeUSD.toFixed(7)})`;
+                    tooltip.innerHTML = `X: ${closestPoint.pos.x.toFixed(0)} Y: ${closestPoint.pos.y.toFixed(0)}
+Direction: ${closestPoint.pos.direction.toFixed(0)}°
+Price: $${closestPoint.pos.price.toFixed(4)}
+Time: ${new Date(closestPoint.pos.timestamp).toLocaleTimeString()}`;
                 } else {
                     tooltip.style.display = 'none';
                 }
@@ -230,9 +232,8 @@ Price: $${closestPoint.pos.priceInfo.priceUSD.toFixed(4)} (${closestPoint.pos.pr
                     X: ${pos.x.toFixed(2)}<br>
                     Y: ${pos.y.toFixed(2)}<br>
                     Direction: ${pos.direction.toFixed(2)}°<br>
-                    <strong>Price Info:</strong><br>
-                    Price (USD): $${pos.priceInfo.priceUSD.toFixed(4)}<br>
-                    Change (USD): $${pos.priceInfo.changeUSD.toFixed(7)}
+                    <strong>Price:</strong> $${pos.price.toFixed(4)}<br>
+                    Time: ${new Date(pos.timestamp).toLocaleTimeString()}
                 `;
             }
 
@@ -256,52 +257,42 @@ Price: $${closestPoint.pos.priceInfo.priceUSD.toFixed(4)} (${closestPoint.pos.pr
 
             // Modified fetch and update function
             function fetchAndUpdate() {
-                fetch('/worm/positions')
+                // Get the highest ID we've seen so far
+                const lastSeenId = Math.max(...Array.from(plottedPositions.keys()), -1);
+
+                fetch(`/worm/positions?id=${lastSeenId}`)
                     .then(response => response.json())
                     .then(positions => {
                         if (positions.length === 0) return;
 
-                        // Find new positions by iterating backwards until we find an existing position
-                        const newPositions = [];
-                        for (let i = positions.length - 1; i >= 0; i--) {
-                            const pos = positions[i];
-                            if (plottedPositions.has(pos.id)) {
-                                break;
-                            }
-                            newPositions.unshift(pos); // Add to front to maintain order
-                        }
+                        // Since we're now getting only new positions, we can add them directly
+                        positions.forEach(pos => plottedPositions.set(pos.id, pos));
 
-                        // If we have new positions, update the display
-                        if (newPositions.length > 0) {
-                            // Update plotted positions map
-                            newPositions.forEach(pos => plottedPositions.set(pos.id, pos));
+                        // Add new positions and trim if necessary
+                        allPositions.push(...positions);
+                        if (allPositions.length > MAX_POSITIONS) {
+                            const trimCount = allPositions.length - MAX_POSITIONS;
+                            allPositions = allPositions.slice(trimCount);
 
-                            // Add new positions and trim if necessary
-                            allPositions.push(...newPositions);
-                            if (allPositions.length > MAX_POSITIONS) {
-                                const trimCount = allPositions.length - MAX_POSITIONS;
-                                allPositions = allPositions.slice(trimCount);
-
-                                // Also remove from plottedPositions map
-                                const remainingIds = new Set(allPositions.map(pos => pos.id));
-                                for (const id of plottedPositions.keys()) {
-                                    if (!remainingIds.has(id)) {
-                                        plottedPositions.delete(id);
-                                    }
+                            // Also remove from plottedPositions map
+                            const remainingIds = new Set(allPositions.map(pos => pos.id));
+                            for (const id of plottedPositions.keys()) {
+                                if (!remainingIds.has(id)) {
+                                    plottedPositions.delete(id);
                                 }
                             }
-
-                            // Update scale bounds with all positions
-                            initializeScaleBounds(allPositions);
-                            // Animate new positions
-                            animateNewPositions(newPositions);
                         }
+
+                        // Update scale bounds with all positions
+                        initializeScaleBounds(allPositions);
+                        // Animate new positions
+                        animateNewPositions(positions);
                     })
                     .catch(error => console.error("Error during polling:", error));
             }
 
             // Initial fetch and setup
-            fetch('/worm/positions')
+            fetch('/worm/positions?id=-1')  // Start with id=-1 to get initial positions
                 .then(response => response.json())
                 .then(positions => {
                     if (positions.length === 0) return;
