@@ -24,6 +24,7 @@ func (db *dbManager) CreatePositionsTable() error {
 	query := /* sql */ `
 		CREATE TABLE IF NOT EXISTS positions (
 			id        INTEGER PRIMARY KEY AUTOINCREMENT,
+			blck      INTEGER NOT NULL, -- the block number
 			x         FLOAT NOT NULL,
 			y         FLOAT NOT NULL,
 			direction FLOAT NOT NULL,
@@ -41,9 +42,9 @@ func (db *dbManager) CreatePositionsTable() error {
 func (db *dbManager) savePosition(p position) error {
 	const q = /* sql */ `
 		INSERT INTO positions
-			(x, y, direction, price, ts)
+			(blck, x, y, direction, price, ts)
 		VALUES
-			(?, ?, ?, ?, ?)
+			(?, ?, ?, ?, ?, ?)
 	`
 
 	stmt, err := db.db.Prepare(q)
@@ -51,7 +52,7 @@ func (db *dbManager) savePosition(p position) error {
 		return fmt.Errorf("error preparing insert stmt: %w", err)
 	}
 
-	if _, err = stmt.Exec(p.X, p.Y, p.Direction, p.Price, p.Timestamp); err != nil {
+	if _, err = stmt.Exec(p.block, p.X, p.Y, p.Direction, p.Price, p.Timestamp); err != nil {
 		return fmt.Errorf("error executing position insert: %w", err)
 	}
 
@@ -65,7 +66,7 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 		FROM
 			positions
 		WHERE id > ?
-		ORDER BY id DESC;
+		ORDER BY id ASC;
 	`
 
 	rows, err := db.db.Query(q, id)
@@ -84,6 +85,22 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 	}
 
 	return positions, nil
+}
+
+func (db *dbManager) getLatestPosition() (position, error) {
+	const q = /* sql */ `
+		SELECT
+			id, x, y, direction, price, ts
+		FROM positions
+		WHERE id = (SELECT MAX(id) FROM positions);
+	`
+
+	var p position
+	if err := db.db.QueryRow(q).Scan(&p.ID, &p.X, &p.Y, &p.Direction, &p.Price, &p.Timestamp); err != nil {
+		return position{}, fmt.Errorf("error getting latest position: %w", err)
+	}
+
+	return p, nil
 }
 
 func (db *dbManager) Close() {

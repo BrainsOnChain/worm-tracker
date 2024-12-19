@@ -2,27 +2,33 @@ package src
 
 import (
 	"fmt"
-	"time"
 )
 
 func Run(fetcher *blockFetcher, db *dbManager) error {
+	valueCh := make(chan contractData, 10)
+	done := make(chan struct{})
 
-	// 1. Fetch the latest position information including the last known block
-	// 2. Fetch the blocks from last block to latest
-	// 3. For each block if there is left, right muscle values > 0 update the position and save that position
+	p, err := db.getLatestPosition()
+	if err != nil {
+		return fmt.Errorf("error getting last block: %w", err)
+	}
 
-	var p position
+	go fetcher.fetch(valueCh, p.block)
+
 	for {
-		cd, err := fetcher.MockFetch(0)
-		if err != nil {
-			return fmt.Errorf("error fetchig mock data: %w", err)
-		}
+		select {
+		case contractVal, ok := <-valueCh:
+			if !ok {
+				return fmt.Errorf("channel closed")
+			}
 
-		p = updatePosition(cd, p)
-		if err := db.savePosition(p); err != nil {
-			return fmt.Errorf("error saving position: %w", err)
+			p = updatePosition(contractVal, p)
+			if err := db.savePosition(p); err != nil {
+				return fmt.Errorf("error saving position: %w", err)
+			}
+		case <-done:
+			close(valueCh) // Signal that no more values will be sent
+			return nil
 		}
-
-		time.Sleep(5 * time.Second)
 	}
 }

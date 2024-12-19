@@ -56,11 +56,7 @@ func NewBlockFetcher(log *zap.Logger) (*blockFetcher, error) {
 		return nil, fmt.Errorf("failed to parse contract ABI: %w", err)
 	}
 
-	return &blockFetcher{
-		log:    log,
-		client: client,
-		abi:    contractAbi,
-	}, nil
+	return &blockFetcher{log: log, client: client, abi: contractAbi}, nil
 }
 
 func (bf *blockFetcher) MockFetch(startBlock int) (contractData, error) {
@@ -73,17 +69,34 @@ func (bf *blockFetcher) MockFetch(startBlock int) (contractData, error) {
 	}, nil
 }
 
-func (bf *blockFetcher) Fetch(startBlock int) error {
-	// get the latest block
-	_, err := bf.getLatestBlock()
+func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
+	latestBlock, err := bf.getLatestBlock()
 	if err != nil {
 		return err
+	}
+
+	// Fetch up to 50 blocks starting from the last one
+	for i := startBlock; i < latestBlock; i += 50 {
+		from := int64(i)
+		to := int64(i + 50)
+		if to > int64(latestBlock) {
+			to = int64(latestBlock)
+		}
+
+		cds, err := bf.fetchBlockRange(from, to)
+		if err != nil {
+			return fmt.Errorf("failed to fetch block range: %w", err)
+		}
+
+		for _, cd := range cds {
+			ch <- cd
+		}
 	}
 
 	return nil
 }
 
-func (bf *blockFetcher) fetch(from, to int64) ([]contractData, error) {
+func (bf *blockFetcher) fetchBlockRange(from, to int64) ([]contractData, error) {
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(from),
 		ToBlock:   big.NewInt(to),
