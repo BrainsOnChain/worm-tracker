@@ -52,6 +52,9 @@ primary_region = 'ewr'
   # Database
   DB_PATH = "/data/worm-tracker.db"
 
+  # Dry Run
+  DRY_RUN = "true"
+
   # CORS
   CORS_ALLOWED_HEADERS = 'Accept,Authorization,Content-Type'
   CORS_ALLOWED_METHODS = 'GET,POST,PUT,DELETE,PATCH,OPTIONS'

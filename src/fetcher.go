@@ -61,15 +61,9 @@ func NewBlockFetcher(log *zap.Logger) (*blockFetcher, error) {
 	defer cancel()
 	latest, err := bf.getLatestBlock(ctx)
 	if err != nil {
-		fmt.Println(err)
+		return nil, fmt.Errorf("failed to get latest block: %w", err)
 	}
-	fmt.Println(latest)
-
-	data, err := bf.fetchBlockRange(ctx, 13683094, 13683098)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(data)
+	log.Info("latest block", zap.Int("block", latest))
 
 	return bf, nil
 }
@@ -85,16 +79,17 @@ func (bf *blockFetcher) MockFetch(startBlock int) (contractData, error) {
 }
 
 func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
-	fmt.Println("fetching from block", startBlock)
+	bf.log.Info("fetching blocks", zap.Int("start_block", startBlock))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	latestBlock, err := bf.getLatestBlock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get latest block: %w", err)
 	}
-	cancel()
 
-	fmt.Println("latest block", latestBlock)
+	bf.log.Info("latest block", zap.Int("block", latestBlock))
 	time.Sleep(5 * time.Second)
 
 	// Fetch up to 50 blocks starting from the last one
@@ -105,12 +100,10 @@ func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
 			to = int64(latestBlock)
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		cds, err := bf.fetchBlockRange(ctx, from, to)
 		if err != nil {
 			return fmt.Errorf("failed to fetch block range: %w", err)
 		}
-		cancel()
 
 		for _, cd := range cds {
 			ch <- cd
@@ -121,6 +114,7 @@ func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
 }
 
 func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]contractData, error) {
+	bf.log.Info("fetching block range", zap.Int64("from", from), zap.Int64("to", to))
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(from),
 		ToBlock:   big.NewInt(to),
@@ -147,7 +141,7 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 		}{}
 
 		if err := bf.abi.UnpackIntoInterface(&event, "WormStateUpdated", vLog.Data); err != nil {
-			return nil, fmt.Errorf("Failed to unpack log data: %w", err)
+			return nil, fmt.Errorf("failed to unpack log data: %w", err)
 		}
 
 		bigFloatToFloat := func(f *big.Float) float64 {

@@ -71,17 +71,16 @@ func run(log *zap.Logger) error {
 	// Start the fetcher
 	log.Info("starting fetcher")
 
-	// TODO: uncomment when ready
-	// fetcher, err := src.NewBlockFetcher(log)
-	// if err != nil {
-	// 	return fmt.Errorf("error initializing fetcher: %w", err)
-	// }
+	fetcher, err := src.NewBlockFetcher(log)
+	if err != nil {
+		return fmt.Errorf("error initializing fetcher: %w", err)
+	}
 
-	// go func() {
-	// 	if err := src.Run(fetcher, db); err != nil {
-	// 		wormErr <- err
-	// 	}
-	// }()
+	go func() {
+		if err := src.Run(fetcher, db); err != nil {
+			wormErr <- err
+		}
+	}()
 
 	// -------------------------------------------------------------------------
 	// Start the server
