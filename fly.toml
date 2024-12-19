@@ -1,0 +1,55 @@
+# fly.toml app configuration file generated for worm-tracker on 2024-12-19T20:47:12-04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'worm-tracker'
+primary_region = 'ewr'
+
+[build]
+
+[http_service]
+  auto_start_machines = true
+  auto_stop_machines = 'stop'
+  force_https = true
+  internal_port = 8080
+  min_machines_running = 0
+  processes = [
+    'app',
+  ]
+  [http_service.concurrency]
+    hard_limit = 20
+    soft_limit = 10
+    type = "requests"
+
+[[services]]
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory = '256mb'
+  size = 'shared-cpu-1x'
+
+[checks]
+  [checks.healthz]
+    grace_period = "30s"
+    interval = "15s"
+    method = "get"
+    path = "/healthz"
+    port = 8080
+    timeout = "10s"
+    type = "http"
+
+[metrics]
+  path = "/metrics" # default for most prometheus exporters
+  port = 9091
+
+[env]
+
+  # CORS
+  CORS_ALLOWED_HEADERS = 'Accept,Authorization,Content-Type'
+  CORS_ALLOWED_METHODS = 'GET,POST,PUT,DELETE,PATCH,OPTIONS'
+  CORS_ALLOWED_ORIGINS = ''
+  CORS_ALLOW_CREDENTIALS = 'true'
+  CORS_EXPOSED_HEADERS = 'Link'
+  CORS_MAX_AGE = '300'
