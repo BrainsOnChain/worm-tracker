@@ -4,7 +4,7 @@ FROM golang:1.22-alpine AS builder
 ARG GOARCH=amd64
 
 # Install dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git gcc musl-dev sqlite-dev
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
@@ -12,20 +12,20 @@ WORKDIR /app
 # Copy go.mod and go.sum files
 COPY go.mod go.sum ./
 
-# Download all dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
+# Download all dependencies
 RUN go mod download
 
-# Copy the source code and the .env file
+# Copy the source code
 COPY . .
-
-# Ensure the vendor folder is used
-RUN go mod vendor
 
 # Build the Go app
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=${GOARCH} go build -mod=vendor -o /app/bin/myapp
 
 # Step 2: Create a minimal runtime image
 FROM alpine:latest
+
+# Install SQLite runtime
+RUN apk add --no-cache sqlite
 
 # Set the Current Working Directory inside the container
 WORKDIR /root/
