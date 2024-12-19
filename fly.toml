@@ -44,7 +44,13 @@ primary_region = 'ewr'
   path = "/metrics" # default for most prometheus exporters
   port = 9091
 
+[mounts]
+  destination = "/data"
+  source = "db_data"
+
 [env]
+  # Database
+  DB_PATH = "/data/worm-tracker.db"
 
   # CORS
   CORS_ALLOWED_HEADERS = 'Accept,Authorization,Content-Type'
