@@ -2,6 +2,7 @@ package src
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 
@@ -97,6 +98,10 @@ func (db *dbManager) getLatestPosition() (position, error) {
 
 	var p position
 	if err := db.db.QueryRow(q).Scan(&p.ID, &p.X, &p.Y, &p.Direction, &p.Price, &p.Timestamp); err != nil {
+		// check for now rows
+		if errors.Is(err, sql.ErrNoRows) {
+			return position{}, nil
+		}
 		return position{}, fmt.Errorf("error getting latest position: %w", err)
 	}
 

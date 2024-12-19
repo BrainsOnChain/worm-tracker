@@ -46,31 +46,41 @@ func run(log *zap.Logger) error {
 	}
 
 	// -------------------------------------------------------------------------
-	// Initialize the fetcher
-	log.Info("initializing fetcher")
+	// Error Channel
+	log.Info("initializing error channels")
+
+	wormErr := make(chan error)
+	serverErr := make(chan error)
+	// -------------------------------------------------------------------------
+	// Start the fetcher
+	log.Info("starting fetcher")
 
 	fetcher, err := src.NewBlockFetcher(log)
 	if err != nil {
 		return fmt.Errorf("error initializing fetcher: %w", err)
 	}
 
-	go src.Run(fetcher, db)
+	go func() {
+		if err := src.Run(fetcher, db); err != nil {
+			wormErr <- err
+		}
+	}()
 
 	// -------------------------------------------------------------------------
 	// Start the server
 	log.Info("starting server")
 
-	serverErr := make(chan error)
-
-	// Start the server
+	server := src.NewServer(log, "8080", db)
 	go func() {
-		server := src.NewServer(log, "8080", db)
-		serverErr <- server.Start()
+		if err := server.Start(); err != nil {
+			serverErr <- err
+		}
 	}()
 
-	if err = <-serverErr; err != nil {
-		log.Sugar().Fatalf("error starting server: %v", err)
+	select {
+	case err := <-wormErr:
+		return fmt.Errorf("error running worm: %w", err)
+	case err := <-serverErr:
+		return fmt.Errorf("error running server: %w", err)
 	}
-
-	return nil
 }

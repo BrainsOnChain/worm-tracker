@@ -13,6 +13,7 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 		return fmt.Errorf("error getting last block: %w", err)
 	}
 
+	fmt.Println("latest position", p)
 	go fetcher.fetch(valueCh, p.block)
 
 	for {

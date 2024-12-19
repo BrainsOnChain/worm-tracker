@@ -56,7 +56,22 @@ func NewBlockFetcher(log *zap.Logger) (*blockFetcher, error) {
 		return nil, fmt.Errorf("failed to parse contract ABI: %w", err)
 	}
 
-	return &blockFetcher{log: log, client: client, abi: contractAbi}, nil
+	bf := &blockFetcher{log: log, client: client, abi: contractAbi}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	latest, err := bf.getLatestBlock(ctx)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(latest)
+
+	data, err := bf.fetchBlockRange(ctx, 13683094, 13683098)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(data)
+
+	return bf, nil
 }
 
 func (bf *blockFetcher) MockFetch(startBlock int) (contractData, error) {
@@ -70,10 +85,17 @@ func (bf *blockFetcher) MockFetch(startBlock int) (contractData, error) {
 }
 
 func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
-	latestBlock, err := bf.getLatestBlock()
+	fmt.Println("fetching from block", startBlock)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	latestBlock, err := bf.getLatestBlock(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get latest block: %w", err)
 	}
+	cancel()
+
+	fmt.Println("latest block", latestBlock)
+	time.Sleep(5 * time.Second)
 
 	// Fetch up to 50 blocks starting from the last one
 	for i := startBlock; i < latestBlock; i += 50 {
@@ -83,10 +105,12 @@ func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
 			to = int64(latestBlock)
 		}
 
-		cds, err := bf.fetchBlockRange(from, to)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cds, err := bf.fetchBlockRange(ctx, from, to)
 		if err != nil {
 			return fmt.Errorf("failed to fetch block range: %w", err)
 		}
+		cancel()
 
 		for _, cd := range cds {
 			ch <- cd
@@ -96,7 +120,7 @@ func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
 	return nil
 }
 
-func (bf *blockFetcher) fetchBlockRange(from, to int64) ([]contractData, error) {
+func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]contractData, error) {
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(from),
 		ToBlock:   big.NewInt(to),
@@ -104,7 +128,7 @@ func (bf *blockFetcher) fetchBlockRange(from, to int64) ([]contractData, error) 
 	}
 
 	// Fetch logs
-	logs, err := bf.client.FilterLogs(context.Background(), query)
+	logs, err := bf.client.FilterLogs(ctx, query)
 	if err != nil {
 		log.Fatalf("Failed to fetch logs: %v", err)
 	}
@@ -150,8 +174,8 @@ func (bf *blockFetcher) fetchBlockRange(from, to int64) ([]contractData, error) 
 	return cds, nil
 }
 
-func (bf *blockFetcher) getLatestBlock() (int, error) {
-	header, err := bf.client.HeaderByNumber(context.Background(), nil)
+func (bf *blockFetcher) getLatestBlock(ctx context.Context) (int, error) {
+	header, err := bf.client.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch latest block: %w", err)
 	}
