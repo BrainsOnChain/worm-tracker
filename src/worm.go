@@ -39,7 +39,17 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 	} else {
 		zap.L().Info("starting fetcher in live mode")
 
-		go fetcher.fetch(valueCh, blockCh, latestBlock)
+		// run the fetcher in a goroutine but if it returns nil start it again
+		// after a 1 minute sleep this is to handle the case where the latest
+		// checked block is the current block
+		go func() {
+			for {
+				if err := fetcher.fetch(valueCh, blockCh, latestBlock); err == nil {
+					zap.L().Info("fetcher returned, sleeping for 1 minute")
+					time.Sleep(1 * time.Minute)
+				}
+			}
+		}()
 	}
 
 	for {
