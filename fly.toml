@@ -53,7 +53,8 @@ primary_region = 'ewr'
   DB_PATH = "/data/worm-tracker.db"
 
   # Dry Run
-  DRY_RUN = "true"
+  CLEAN_SLATE = "true"
+  DRY_RUN = "false"
 
   # CORS
   CORS_ALLOWED_HEADERS = 'Accept,Authorization,Content-Type'

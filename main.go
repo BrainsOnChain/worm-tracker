@@ -56,7 +56,8 @@ func run(log *zap.Logger) error {
 	}
 	defer db.Close()
 
-	if err := db.CreatePositionsTable(); err != nil {
+	cleanSlate := os.Getenv("CLEAN_SLATE") == "true"
+	if err := db.Initialize(cleanSlate); err != nil {
 		return fmt.Errorf("error creating positions table: %w", err)
 	}
 

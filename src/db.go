@@ -21,7 +21,19 @@ func NewDBManager(dataSourceName string) (*dbManager, error) {
 	return &dbManager{db: db}, nil
 }
 
-func (db *dbManager) CreatePositionsTable() error {
+func (db *dbManager) Initialize(cleanSlate bool) error {
+	if cleanSlate {
+		dropPositions := /* sql */ `DROP TABLE IF EXISTS positions;`
+		if _, err := db.db.Exec(dropPositions); err != nil {
+			return fmt.Errorf("failed to drop positions table: %w", err)
+		}
+
+		dropBlocksChecked := /* sql */ `DROP TABLE IF EXISTS blocks_checked;`
+		if _, err := db.db.Exec(dropBlocksChecked); err != nil {
+			return fmt.Errorf("failed to drop blocks_checked table: %w", err)
+		}
+	}
+
 	createPositions := /* sql */ `
 		CREATE TABLE IF NOT EXISTS positions (
 			id        INTEGER PRIMARY KEY AUTOINCREMENT,

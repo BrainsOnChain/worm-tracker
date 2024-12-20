@@ -146,7 +146,7 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 			leftMuscle:  event.LeftMuscle.Int64(),
 			rightMuscle: event.RightMuscle.Int64(),
 			price:       float64(event.PositionPrice.Int64()) / 10000000,
-			// timestamp TODO
+			ts:          time.Unix(event.PositionTimestamp.Int64(), 0), // Set ts by converting the UNIX timestamp
 		}
 
 		if cd.leftMuscle == 0 && cd.rightMuscle == 0 {
