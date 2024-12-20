@@ -53,13 +53,5 @@ primary_region = 'ewr'
   DB_PATH = "/data/worm-tracker.db"
 
   # Dry Run
-  CLEAN_SLATE = "true"
-  DRY_RUN = "false"
-
-  # CORS
-  CORS_ALLOWED_HEADERS = 'Accept,Authorization,Content-Type'
-  CORS_ALLOWED_METHODS = 'GET,POST,PUT,DELETE,PATCH,OPTIONS'
-  CORS_ALLOWED_ORIGINS = ''
-  CORS_ALLOW_CREDENTIALS = 'true'
-  CORS_EXPOSED_HEADERS = 'Link'
-  CORS_MAX_AGE = '300'
+  CLEAN_SLATE = "true" # Set to false to keep existing data on a deploy
+  DRY_RUN = "false"    # Set to true to disable reads from hyperliquid to the database
