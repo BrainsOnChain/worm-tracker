@@ -23,7 +23,7 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 
 		go func() {
 			for {
-				cd, err := fetcher.MockFetch(0)
+				cd, err := fetcher.mockFetch()
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -44,6 +44,15 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 			if !ok {
 				return fmt.Errorf("channel closed")
 			}
+
+			zap.L().Info(
+				"received contract data",
+				zap.Int("block", contractVal.block),
+				zap.Int64("left_muscle", contractVal.leftMuscle),
+				zap.Int64("right_muscle", contractVal.rightMuscle),
+				zap.Float64("price", contractVal.price),
+				zap.Time("ts", contractVal.ts),
+			)
 
 			p = updatePosition(contractVal, p)
 			if err := db.savePosition(p); err != nil {

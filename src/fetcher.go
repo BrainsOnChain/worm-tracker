@@ -56,19 +56,10 @@ func NewBlockFetcher(log *zap.Logger) (*blockFetcher, error) {
 		return nil, fmt.Errorf("failed to parse contract ABI: %w", err)
 	}
 
-	bf := &blockFetcher{log: log, client: client, abi: contractAbi}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	latest, err := bf.getLatestBlock(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest block: %w", err)
-	}
-	log.Info("latest block", zap.Int("block", latest))
-
-	return bf, nil
+	return &blockFetcher{log: log, client: client, abi: contractAbi}, nil
 }
 
-func (bf *blockFetcher) MockFetch(startBlock int) (contractData, error) {
+func (bf *blockFetcher) mockFetch() (contractData, error) {
 	return contractData{
 		block:       rand.Int(),
 		leftMuscle:  int64(rand.Intn(100)),
@@ -79,18 +70,21 @@ func (bf *blockFetcher) MockFetch(startBlock int) (contractData, error) {
 }
 
 func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
-	bf.log.Info("fetching blocks", zap.Int("start_block", startBlock))
+	if startBlock == 0 {
+		startBlock = 13284000
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	latestBlock, err := bf.getLatestBlock(ctx)
+	latestBlock, err := bf.getLatestBlock(context.TODO())
 	if err != nil {
 		return fmt.Errorf("failed to get latest block: %w", err)
 	}
 
-	bf.log.Info("latest block", zap.Int("block", latestBlock))
-	time.Sleep(5 * time.Second)
+	bf.log.Info(
+		"fetching blocks",
+		zap.Int("start", startBlock),
+		zap.Int("latest", latestBlock),
+		zap.Int("to_query", latestBlock-startBlock),
+	)
 
 	// Fetch up to 50 blocks starting from the last one
 	for i := startBlock; i < latestBlock; i += 50 {
@@ -100,7 +94,7 @@ func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
 			to = int64(latestBlock)
 		}
 
-		cds, err := bf.fetchBlockRange(ctx, from, to)
+		cds, err := bf.fetchBlockRange(context.TODO(), from, to)
 		if err != nil {
 			return fmt.Errorf("failed to fetch block range: %w", err)
 		}
@@ -108,13 +102,13 @@ func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
 		for _, cd := range cds {
 			ch <- cd
 		}
+		time.Sleep(5 * time.Second)
 	}
 
 	return nil
 }
 
 func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]contractData, error) {
-	bf.log.Info("fetching block range", zap.Int64("from", from), zap.Int64("to", to))
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(from),
 		ToBlock:   big.NewInt(to),
@@ -126,6 +120,7 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 	if err != nil {
 		log.Fatalf("Failed to fetch logs: %v", err)
 	}
+	bf.log.Info("fetching block range", zap.Int64("from", from), zap.Int64("to", to), zap.Int("logs", len(logs)))
 
 	cds := make([]contractData, 0, len(logs))
 
@@ -136,29 +131,24 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 			DeltaY            *big.Int
 			LeftMuscle        *big.Int
 			RightMuscle       *big.Int
-			PositionTimestamp *big.Int   // timestamp is int?
-			PositionPrice     *big.Float // float or int?
+			PositionTimestamp *big.Int // timestamp is int?
+			PositionPrice     *big.Int // float or int?
 		}{}
 
 		if err := bf.abi.UnpackIntoInterface(&event, "WormStateUpdated", vLog.Data); err != nil {
 			return nil, fmt.Errorf("failed to unpack log data: %w", err)
 		}
 
-		bigFloatToFloat := func(f *big.Float) float64 {
-			fl, _ := f.Float64()
-			return fl
-		}
-
 		cd := contractData{
 			block:       int(vLog.BlockNumber),
 			leftMuscle:  event.LeftMuscle.Int64(),
 			rightMuscle: event.RightMuscle.Int64(),
-			price:       bigFloatToFloat(event.PositionPrice),
+			price:       float64(event.PositionPrice.Int64()) / 10000000,
 			// timestamp TODO
 		}
 
 		if cd.leftMuscle == 0 && cd.rightMuscle == 0 {
-			bf.log.Warn("zero muscle movements")
+			bf.log.Info("zero muscle movements")
 			continue
 		}
 
