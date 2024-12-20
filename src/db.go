@@ -22,7 +22,7 @@ func NewDBManager(dataSourceName string) (*dbManager, error) {
 }
 
 func (db *dbManager) CreatePositionsTable() error {
-	query := /* sql */ `
+	createPositions := /* sql */ `
 		CREATE TABLE IF NOT EXISTS positions (
 			id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			blck      INTEGER NOT NULL, -- the block number
@@ -33,8 +33,26 @@ func (db *dbManager) CreatePositionsTable() error {
 			ts        TIMESTAMP NOT NULL
 		);`
 
-	if _, err := db.db.Exec(query); err != nil {
+	if _, err := db.db.Exec(createPositions); err != nil {
 		return fmt.Errorf("failed to create positions table: %w", err)
+	}
+
+	createBlocksChecked := /* sql */ `
+		CREATE TABLE IF NOT EXISTS blocks_checked (
+			blck INTEGER PRIMARY KEY
+		);`
+
+	if _, err := db.db.Exec(createBlocksChecked); err != nil {
+		return fmt.Errorf("failed to create blocks_checked table: %w", err)
+	}
+
+	// insert 0 as the first block checked if it doesn't exist
+	const q = /* sql */ `
+		INSERT OR IGNORE INTO blocks_checked (blck) VALUES (0);
+	`
+
+	if _, err := db.db.Exec(q); err != nil {
+		return fmt.Errorf("failed to insert 0 into blocks_checked: %w", err)
 	}
 
 	return nil
@@ -106,6 +124,40 @@ func (db *dbManager) getLatestPosition() (position, error) {
 	}
 
 	return p, nil
+}
+
+func (db *dbManager) saveBlockChecked(blck int) error {
+	const q = /* sql */ `
+		INSERT INTO blocks_checked (blck) VALUES (?);
+	`
+
+	stmt, err := db.db.Prepare(q)
+	if err != nil {
+		return fmt.Errorf("error preparing insert stmt: %w", err)
+	}
+
+	if _, err = stmt.Exec(blck); err != nil {
+		return fmt.Errorf("error executing block insert: %w", err)
+	}
+
+	return nil
+}
+
+func (db *dbManager) getLatestBlockChecked() (int, error) {
+	const q = /* sql */ `
+		SELECT MAX(blck) FROM blocks_checked;
+	`
+
+	var blck int
+	if err := db.db.QueryRow(q).Scan(&blck); err != nil {
+		// check for no rows
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("error getting latest block checked: %w", err)
+	}
+
+	return blck, nil
 }
 
 func (db *dbManager) Close() {

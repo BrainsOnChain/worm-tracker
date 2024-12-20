@@ -69,9 +69,9 @@ func (bf *blockFetcher) mockFetch() (contractData, error) {
 	}, nil
 }
 
-func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
+func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh chan int, startBlock int) error {
 	if startBlock == 0 {
-		startBlock = 13284000
+		startBlock = 13284000 // TODO: configure this correctly
 	}
 
 	latestBlock, err := bf.getLatestBlock(context.TODO())
@@ -100,9 +100,11 @@ func (bf *blockFetcher) fetch(ch chan contractData, startBlock int) error {
 		}
 
 		for _, cd := range cds {
-			ch <- cd
+			contractDataCh <- cd
 		}
-		time.Sleep(5 * time.Second)
+
+		latestBlockCh <- int(to)    // Save the last block checked
+		time.Sleep(5 * time.Second) // TODO: configure this correctly
 	}
 
 	return nil
@@ -148,7 +150,7 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 		}
 
 		if cd.leftMuscle == 0 && cd.rightMuscle == 0 {
-			bf.log.Info("zero muscle movements")
+			bf.log.Info("zero muscle movements, ignoring", zap.Int("block", cd.block))
 			continue
 		}
 

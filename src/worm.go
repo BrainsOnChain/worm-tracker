@@ -10,15 +10,19 @@ import (
 
 func Run(fetcher *blockFetcher, db *dbManager) error {
 	valueCh := make(chan contractData, 10)
-	done := make(chan struct{})
+	blockCh := make(chan int)
 
-	p, err := db.getLatestPosition()
+	latestBlock, err := db.getLatestBlockChecked()
 	if err != nil {
 		return fmt.Errorf("error getting last block: %w", err)
 	}
 
-	dryRun := os.Getenv("DRY_RUN")
-	if dryRun == "true" {
+	p, err := db.getLatestPosition()
+	if err != nil {
+		return fmt.Errorf("error getting latest position: %w", err)
+	}
+
+	if dryRun := os.Getenv("DRY_RUN"); dryRun == "true" {
 		zap.L().Info("starting fetcher in dry-run mode")
 
 		go func() {
@@ -35,14 +39,24 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 	} else {
 		zap.L().Info("starting fetcher in live mode")
 
-		go fetcher.fetch(valueCh, p.block)
+		go fetcher.fetch(valueCh, blockCh, latestBlock)
 	}
 
 	for {
 		select {
+		case block, ok := <-blockCh:
+			if !ok {
+				return fmt.Errorf("block channel closed")
+			}
+
+			zap.L().Info("new block tracked", zap.Int("block", block))
+
+			if err := db.saveBlockChecked(block); err != nil {
+				return fmt.Errorf("error saving block: %w", err)
+			}
 		case contractVal, ok := <-valueCh:
 			if !ok {
-				return fmt.Errorf("channel closed")
+				return fmt.Errorf("contract data channel closed")
 			}
 
 			zap.L().Info(
@@ -58,9 +72,6 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 			if err := db.savePosition(p); err != nil {
 				return fmt.Errorf("error saving position: %w", err)
 			}
-		case <-done:
-			close(valueCh) // Signal that no more values will be sent
-			return nil
 		}
 	}
 }
