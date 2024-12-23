@@ -30,11 +30,12 @@ var (
 )
 
 type contractData struct {
-	block       int
-	leftMuscle  int64
-	rightMuscle int64
-	price       float64
-	ts          time.Time
+	transactionHash string
+	block           int
+	leftMuscle      int64
+	rightMuscle     int64
+	price           float64
+	ts              time.Time
 }
 
 type blockFetcher struct {
@@ -142,11 +143,12 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 		}
 
 		cd := contractData{
-			block:       int(vLog.BlockNumber),
-			leftMuscle:  event.LeftMuscle.Int64(),
-			rightMuscle: event.RightMuscle.Int64(),
-			price:       float64(event.PositionPrice.Int64()) / 10000000,
-			ts:          time.Unix(event.PositionTimestamp.Int64(), 0), // Set ts by converting the UNIX timestamp
+			transactionHash: vLog.TxHash.String(),
+			block:           int(vLog.BlockNumber),
+			leftMuscle:      event.LeftMuscle.Int64(),
+			rightMuscle:     event.RightMuscle.Int64(),
+			price:           float64(event.PositionPrice.Int64()) / 10000000,
+			ts:              time.Unix(event.PositionTimestamp.Int64(), 0), // Set ts by converting the UNIX timestamp
 		}
 
 		if cd.leftMuscle == 0 && cd.rightMuscle == 0 {
