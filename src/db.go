@@ -38,6 +38,7 @@ func (db *dbManager) Initialize(cleanSlate bool) error {
 		CREATE TABLE IF NOT EXISTS positions (
 			id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			blck      INTEGER NOT NULL, -- the block number
+			transaction_hash TEXT NOT NULL, -- the transaction hash
 			x         FLOAT NOT NULL,
 			y         FLOAT NOT NULL,
 			direction FLOAT NOT NULL,
@@ -73,9 +74,9 @@ func (db *dbManager) Initialize(cleanSlate bool) error {
 func (db *dbManager) savePosition(p position) error {
 	const q = /* sql */ `
 		INSERT INTO positions
-			(blck, x, y, direction, price, ts)
+			(blck, transaction_hash, x, y, direction, price, ts)
 		VALUES
-			(?, ?, ?, ?, ?, ?)
+			(?, ?, ?, ?, ?, ?, ?)
 	`
 
 	stmt, err := db.db.Prepare(q)
@@ -83,7 +84,7 @@ func (db *dbManager) savePosition(p position) error {
 		return fmt.Errorf("error preparing insert stmt: %w", err)
 	}
 
-	if _, err = stmt.Exec(p.block, p.X, p.Y, p.Direction, p.Price, p.Timestamp); err != nil {
+	if _, err = stmt.Exec(p.Block, p.TransactionHash, p.X, p.Y, p.Direction, p.Price, p.Timestamp); err != nil {
 		return fmt.Errorf("error executing position insert: %w", err)
 	}
 
@@ -93,7 +94,7 @@ func (db *dbManager) savePosition(p position) error {
 func (db *dbManager) fetchPositions(id int) ([]position, error) {
 	const q = /* sql */ `
 		SELECT
-			id, x, y, direction, price, ts
+			id, blck, transaction_hash, x, y, direction, price, ts
 		FROM
 			positions
 		WHERE id > ?
@@ -109,7 +110,7 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 	positions := make([]position, 0)
 	for rows.Next() {
 		var p position
-		if err := rows.Scan(&p.ID, &p.X, &p.Y, &p.Direction, &p.Price, &p.Timestamp); err != nil {
+		if err := rows.Scan(&p.ID, &p.Block, &p.TransactionHash, &p.X, &p.Y, &p.Direction, &p.Price, &p.Timestamp); err != nil {
 			return nil, err
 		}
 		positions = append(positions, p)

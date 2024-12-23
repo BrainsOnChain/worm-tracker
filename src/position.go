@@ -6,13 +6,14 @@ import (
 )
 
 type position struct {
-	ID        int       `json:"id"` // set by the DB
-	block     int       `json:"-"`  // the associated block number that contained the muscle movements
-	X         float64   `json:"x"`
-	Y         float64   `json:"y"`
-	Direction float64   `json:"direction"`
-	Price     float64   `json:"price"`
-	Timestamp time.Time `json:"timestamp"`
+	ID              int       `json:"id"`          // set by the DB
+	Block           int       `json:"blockNumber"` // the associated block number that contained the muscle movements
+	TransactionHash string    `json:"transactionHash"`
+	X               float64   `json:"x"`
+	Y               float64   `json:"y"`
+	Direction       float64   `json:"direction"`
+	Price           float64   `json:"price"`
+	Timestamp       time.Time `json:"timestamp"`
 }
 
 // updatePosition takes the contract data and the current position to create a
@@ -36,12 +37,13 @@ func updatePosition(c contractData, cp position) position {
 	newY := cp.Y + dY
 
 	np := position{
-		block:     c.block,
-		X:         newX,
-		Y:         newY,
-		Direction: newDirection,
-		Price:     c.price,
-		Timestamp: c.ts,
+		Block:           c.block,
+		TransactionHash: c.transactionHash,
+		X:               newX,
+		Y:               newY,
+		Direction:       newDirection,
+		Price:           c.price,
+		Timestamp:       c.ts,
 	}
 
 	return np
