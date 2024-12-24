@@ -26,7 +26,10 @@ var (
 	abiStr string
 
 	// Contract address
-	contractAddress = common.HexToAddress("0x7A129762332B8f4c6Ed4850c17B218C89e78854d")
+	contractAddress = common.HexToAddress("0xbc406E6A1592d3b3c2cd20B015da5A7b3983DAC0")
+
+	// Start Block
+	initialBlock = 14186473
 )
 
 type contractData struct {
@@ -72,7 +75,7 @@ func (bf *blockFetcher) mockFetch() (contractData, error) {
 
 func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh chan int, startBlock int) error {
 	if startBlock == 0 {
-		startBlock = 13284000 // TODO: configure this correctly
+		startBlock = initialBlock
 	}
 
 	latestBlock, err := bf.getLatestBlock(context.TODO())
