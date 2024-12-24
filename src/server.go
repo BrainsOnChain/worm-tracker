@@ -15,14 +15,16 @@ type server struct {
 	port   string
 	router *chi.Mux
 	db     *dbManager
+	cache  *cache
 }
 
-func NewServer(log *zap.Logger, port string, db *dbManager) *server {
+func NewServer(log *zap.Logger, port string, db *dbManager, cache *cache) *server {
 	return &server{
 		log:    log,
 		port:   port,
 		router: chi.NewRouter(),
 		db:     db,
+		cache:  cache,
 	}
 }
 
@@ -66,12 +68,23 @@ func (s *server) getWormPositions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	positions, err := s.db.fetchPositions(id)
+	var positions []position
+	if id == -1 {
+		positions = s.cache.getPositions()
+		if len(positions) > 0 {
+			id = positions[len(positions)-1].ID
+			s.log.Info("Obtained positions from cache", zap.Int("count", len(positions)), zap.Int("last_id", id))
+		}
+	}
+
+	newPositions, err := s.db.fetchPositions(id)
 	if err != nil {
 		s.log.Error("failed to fetch positions", zap.Error(err))
 		http.Error(w, "failed to fetch positions", http.StatusInternalServerError)
 		return
 	}
+
+	positions = append(positions, newPositions...)
 
 	// Encode the positions as a JSON response
 	w.Header().Set("Content-Type", "application/json")

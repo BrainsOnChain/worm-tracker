@@ -62,6 +62,13 @@ func run(log *zap.Logger) error {
 	}
 
 	// -------------------------------------------------------------------------
+	// Initialize the cache
+	log.Info("initializing cache")
+
+	cache := src.NewCache(log, db)
+	go cache.Run()
+
+	// -------------------------------------------------------------------------
 	// Error Channel
 	log.Info("initializing error channels")
 
@@ -86,15 +93,17 @@ func run(log *zap.Logger) error {
 	// Start the server
 	log.Info("starting server")
 
-	server := src.NewServer(log, "8080", db)
+	server := src.NewServer(log, "8080", db, cache)
 	go func() {
 		if err := server.Start(); err != nil {
 			serverErr <- err
 		}
 	}()
 
-	select {
-	case err := <-serverErr:
+	if err := <-serverErr; err != nil {
+		cache.Close()
 		return fmt.Errorf("error running server: %w", err)
 	}
+
+	return nil
 }
