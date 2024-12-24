@@ -1,6 +1,7 @@
 package src
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -8,14 +9,9 @@ import (
 	"go.uber.org/zap"
 )
 
-func Run(fetcher *blockFetcher, db *dbManager) error {
+func Run(log *zap.Logger, fetcher *blockFetcher, db *dbManager) error {
 	valueCh := make(chan contractData, 10)
 	blockCh := make(chan int)
-
-	latestBlock, err := db.getLatestBlockChecked()
-	if err != nil {
-		return fmt.Errorf("error getting last block: %w", err)
-	}
 
 	p, err := db.getLatestPosition()
 	if err != nil {
@@ -23,13 +19,14 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 	}
 
 	if dryRun := os.Getenv("DRY_RUN"); dryRun == "true" {
-		zap.L().Info("starting fetcher in dry-run mode")
+		log.Info("starting fetcher in dry-run mode")
 
 		go func() {
 			for {
 				cd, err := fetcher.mockFetch()
 				if err != nil {
-					fmt.Println(err)
+					log.Error("error fetching contract data", zap.Error(err))
+					return
 				}
 				valueCh <- cd
 				time.Sleep(5 * time.Second)
@@ -37,17 +34,27 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 		}()
 
 	} else {
-		zap.L().Info("starting fetcher in live mode")
+		log.Info("starting fetcher in live mode")
 
 		// run the fetcher in a goroutine but if it returns nil start it again
 		// after a 1 minute sleep this is to handle the case where the latest
 		// checked block is the current block
 		go func() {
 			for {
-				if err := fetcher.fetch(valueCh, blockCh, latestBlock); err == nil {
-					zap.L().Info("fetcher returned, sleeping for 1 minute")
-					time.Sleep(1 * time.Minute)
+				latestBlock, err := db.getLatestBlockChecked()
+				if err != nil {
+					log.Error("error getting latest block checked", zap.Error(err))
+					return
 				}
+
+				fmt.Println("FETCHER CALLED")
+				err = fetcher.fetch(valueCh, blockCh, latestBlock)
+				if err != nil {
+					log.Error("fetcher error", zap.Error(err))
+				} else {
+					log.Info("fetcher returned, sleeping for 1 minute")
+				}
+				time.Sleep(1 * time.Minute)
 			}
 		}()
 	}
@@ -59,9 +66,13 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 				return fmt.Errorf("block channel closed")
 			}
 
-			zap.L().Info("new block tracked", zap.Int("block", block))
+			log.Info("new block tracked", zap.Int("block", block))
 
 			if err := db.saveBlockChecked(block); err != nil {
+				if errors.Is(err, errUniqueConstraintViolation) {
+					log.Info("block already checked", zap.Int("block", block))
+					continue
+				}
 				return fmt.Errorf("error saving block: %w", err)
 			}
 		case contractVal, ok := <-valueCh:
@@ -69,7 +80,7 @@ func Run(fetcher *blockFetcher, db *dbManager) error {
 				return fmt.Errorf("contract data channel closed")
 			}
 
-			zap.L().Info(
+			log.Info(
 				"received contract data",
 				zap.Int("block", contractVal.block),
 				zap.Int64("left_muscle", contractVal.leftMuscle),

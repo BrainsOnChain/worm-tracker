@@ -65,7 +65,6 @@ func run(log *zap.Logger) error {
 	// Error Channel
 	log.Info("initializing error channels")
 
-	wormErr := make(chan error)
 	serverErr := make(chan error)
 
 	// -------------------------------------------------------------------------
@@ -78,8 +77,8 @@ func run(log *zap.Logger) error {
 	}
 
 	go func() {
-		if err := src.Run(fetcher, db); err != nil {
-			wormErr <- err
+		if err := src.Run(log, fetcher, db); err != nil {
+			log.Error("error running worm", zap.Error(err))
 		}
 	}()
 
@@ -95,8 +94,6 @@ func run(log *zap.Logger) error {
 	}()
 
 	select {
-	case err := <-wormErr:
-		return fmt.Errorf("error running worm: %w", err)
 	case err := <-serverErr:
 		return fmt.Errorf("error running server: %w", err)
 	}

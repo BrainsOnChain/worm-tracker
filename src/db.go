@@ -9,6 +9,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+var (
+	errUniqueConstraintViolation = errors.New("unique constraint violation")
+)
+
 type dbManager struct {
 	db *sql.DB
 }
@@ -150,6 +154,10 @@ func (db *dbManager) saveBlockChecked(blck int) error {
 	}
 
 	if _, err = stmt.Exec(blck); err != nil {
+		// Handle unique constraint violation
+		if err.Error() == "UNIQUE constraint failed: blocks_checked.blck" {
+			return errUniqueConstraintViolation
+		}
 		return fmt.Errorf("error executing block insert: %w", err)
 	}
 

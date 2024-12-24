@@ -29,7 +29,7 @@ var (
 	contractAddress = common.HexToAddress("0xbc406E6A1592d3b3c2cd20B015da5A7b3983DAC0")
 
 	// Start Block
-	initialBlock = 14186473
+	initialBlock = 14187700
 )
 
 type contractData struct {
@@ -107,8 +107,8 @@ func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh ch
 			contractDataCh <- cd
 		}
 
-		latestBlockCh <- int(to)    // Save the last block checked
-		time.Sleep(5 * time.Second) // TODO: configure this correctly
+		latestBlockCh <- int(to) // Save the last block checked
+		time.Sleep(5 * time.Second)
 	}
 
 	return nil
@@ -142,7 +142,8 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 		}{}
 
 		if err := bf.abi.UnpackIntoInterface(&event, "WormStateUpdated", vLog.Data); err != nil {
-			return nil, fmt.Errorf("failed to unpack log data: %w", err)
+			bf.log.Sugar().Warnf("failed to unpack log data: %w", err)
+			continue
 		}
 
 		cd := contractData{
