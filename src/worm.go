@@ -47,14 +47,13 @@ func Run(log *zap.Logger, fetcher *blockFetcher, db *dbManager) error {
 					return
 				}
 
-				fmt.Println("FETCHER CALLED")
 				err = fetcher.fetch(valueCh, blockCh, latestBlock)
 				if err != nil {
 					log.Error("fetcher error", zap.Error(err))
 				} else {
 					log.Info("fetcher returned, sleeping for 1 minute")
 				}
-				time.Sleep(1 * time.Minute)
+				time.Sleep(20 * time.Second)
 			}
 		}()
 	}
