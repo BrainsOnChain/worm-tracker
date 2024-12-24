@@ -102,7 +102,8 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 		FROM
 			positions
 		WHERE id > ?
-		ORDER BY id ASC;
+		ORDER BY id ASC
+		LIMIT 3000;
 	`
 
 	rows, err := db.db.Query(q, id)
