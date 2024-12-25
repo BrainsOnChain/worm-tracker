@@ -40,14 +40,14 @@ func (db *dbManager) Initialize(cleanSlate bool) error {
 
 	createPositions := /* sql */ `
 		CREATE TABLE IF NOT EXISTS positions (
-			id        INTEGER PRIMARY KEY AUTOINCREMENT,
-			blck      INTEGER NOT NULL, -- the block number
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			blck             INTEGER NOT NULL, -- the block number
 			transaction_hash TEXT NOT NULL, -- the transaction hash
-			x         FLOAT NOT NULL,
-			y         FLOAT NOT NULL,
-			direction FLOAT NOT NULL,
-			price     FLOAT NOT NULL,
-			ts        TIMESTAMP NOT NULL
+			x                FLOAT NOT NULL,
+			y                FLOAT NOT NULL,
+			direction        FLOAT NOT NULL,
+			price            FLOAT NOT NULL,
+			ts               TIMESTAMP NOT NULL
 		);`
 
 	if _, err := db.db.Exec(createPositions); err != nil {
@@ -103,7 +103,7 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 			positions
 		WHERE id > ?
 		ORDER BY id ASC
-		LIMIT 3000;
+		LIMIT 100;
 	`
 
 	rows, err := db.db.Query(q, id)
@@ -117,6 +117,59 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 		var p position
 		if err := rows.Scan(&p.ID, &p.Block, &p.TransactionHash, &p.X, &p.Y, &p.Direction, &p.Price, &p.Timestamp); err != nil {
 			return nil, err
+		}
+		positions = append(positions, p)
+	}
+
+	return positions, nil
+}
+
+// fetchSample returns evenly distributed sample positions, excluding the most recent 100 positions.
+// The positions are ordered by id in ascending order.
+func (db *dbManager) fetchSample(count int) ([]position, error) {
+	const query = /* sql */ `
+		WITH excluded_positions AS (
+			SELECT id FROM positions ORDER BY id DESC LIMIT 100
+		),
+		available_positions AS (
+			SELECT id, blck, transaction_hash, x, y, direction, price, ts,
+				   COUNT(*) OVER () as total_count, 
+				   MIN(id) OVER () as first_id
+			FROM positions
+			WHERE id NOT IN (SELECT id FROM excluded_positions)
+		),
+		interval AS (
+			SELECT (total_count / ?) as interval
+			FROM available_positions
+			LIMIT 1
+		)
+		SELECT id, blck, transaction_hash, x, y, direction, price, ts
+		FROM available_positions
+		WHERE (id - first_id) % interval = 0
+		ORDER BY id ASC
+		LIMIT ?;
+	`
+
+	rows, err := db.db.Query(query, count, count)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching evenly distributed sample: %w", err)
+	}
+	defer rows.Close()
+
+	var positions []position
+	for rows.Next() {
+		var p position
+		if err := rows.Scan(
+			&p.ID,
+			&p.Block,
+			&p.TransactionHash,
+			&p.X,
+			&p.Y,
+			&p.Direction,
+			&p.Price,
+			&p.Timestamp,
+		); err != nil {
+			return nil, fmt.Errorf("error scanning position: %w", err)
 		}
 		positions = append(positions, p)
 	}

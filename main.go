@@ -93,8 +93,9 @@ func run(log *zap.Logger) error {
 		}
 	}()
 
-	select {
-	case err := <-serverErr:
+	if err := <-serverErr; err != nil {
 		return fmt.Errorf("error running server: %w", err)
 	}
+
+	return nil
 }
