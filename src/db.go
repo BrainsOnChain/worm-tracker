@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -128,43 +127,30 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 // fetchSample returns evenly distributed sample positions, excluding the most recent 100 positions.
 // The positions are ordered by id in ascending order.
 func (db *dbManager) fetchSample(count int) ([]position, error) {
-	// First, get the stats we need
-	const statsQuery = /* sql */ `
+	const query = /* sql */ `
 		WITH excluded_positions AS (
 			SELECT id FROM positions ORDER BY id DESC LIMIT 100
+		),
+		available_positions AS (
+			SELECT id, blck, transaction_hash, x, y, direction, price, ts,
+				   COUNT(*) OVER () as total_count, 
+				   MIN(id) OVER () as first_id
+			FROM positions
+			WHERE id NOT IN (SELECT id FROM excluded_positions)
+		),
+		interval AS (
+			SELECT (total_count / ?) as interval
+			FROM available_positions
+			LIMIT 1
 		)
-		SELECT 
-			MIN(id) as first_id, --first id
-			COUNT(*) as total_count --total count
-		FROM positions
-		WHERE id NOT IN (SELECT id FROM excluded_positions);
-	`
-
-	var firstID int
-	var totalCount int
-	if err := db.db.QueryRow(statsQuery).Scan(&firstID, &totalCount); err != nil {
-		return nil, fmt.Errorf("error getting position stats: %w", err)
-	}
-
-	// Calculate the interval size
-	interval := float64(totalCount) / float64(count)
-	intervalInt := int(math.Round(interval))
-
-	// Now get the evenly distributed positions
-	const positionsQuery = /* sql */ `
-		WITH excluded_positions AS (
-			SELECT id FROM positions ORDER BY id DESC LIMIT 100
-		)
-		SELECT
-			id, blck, transaction_hash, x, y, direction, price, ts
-		FROM positions
-		WHERE id NOT IN (SELECT id FROM excluded_positions)
-		AND (id - ?) % ? = 0
+		SELECT id, blck, transaction_hash, x, y, direction, price, ts
+		FROM available_positions
+		WHERE (id - first_id) % interval = 0
 		ORDER BY id ASC
 		LIMIT ?;
 	`
 
-	rows, err := db.db.Query(positionsQuery, firstID, intervalInt, count)
+	rows, err := db.db.Query(query, count, count)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching evenly distributed sample: %w", err)
 	}
