@@ -40,14 +40,14 @@ func (db *dbManager) Initialize(cleanSlate bool) error {
 
 	createPositions := /* sql */ `
 		CREATE TABLE IF NOT EXISTS positions (
-			id        INTEGER PRIMARY KEY AUTOINCREMENT,
-			blck      INTEGER NOT NULL, -- the block number
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			blck             INTEGER NOT NULL, -- the block number
 			transaction_hash TEXT NOT NULL, -- the transaction hash
-			x         FLOAT NOT NULL,
-			y         FLOAT NOT NULL,
-			direction FLOAT NOT NULL,
-			price     FLOAT NOT NULL,
-			ts        TIMESTAMP NOT NULL
+			x                FLOAT NOT NULL,
+			y                FLOAT NOT NULL,
+			direction        FLOAT NOT NULL,
+			price            FLOAT NOT NULL,
+			ts               TIMESTAMP NOT NULL
 		);`
 
 	if _, err := db.db.Exec(createPositions); err != nil {
@@ -103,7 +103,7 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 			positions
 		WHERE id > ?
 		ORDER BY id ASC
-		LIMIT 3000;
+		LIMIT 100;
 	`
 
 	rows, err := db.db.Query(q, id)
@@ -117,6 +117,52 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 		var p position
 		if err := rows.Scan(&p.ID, &p.Block, &p.TransactionHash, &p.X, &p.Y, &p.Direction, &p.Price, &p.Timestamp); err != nil {
 			return nil, err
+		}
+		positions = append(positions, p)
+	}
+
+	return positions, nil
+}
+
+// fetchSample return a random sample of count positions. The positions are
+// ordered by id in ascending order.
+func (db *dbManager) fetchSample(count int) ([]position, error) {
+	const query = /* sql */ `
+        WITH excluded_positions AS (
+            SELECT id FROM positions ORDER BY id DESC LIMIT 100
+        ),
+        random_sample AS (
+            SELECT * FROM positions
+            WHERE id NOT IN (SELECT id FROM excluded_positions)
+            ORDER BY RANDOM()
+            LIMIT ?
+        )
+        SELECT
+			id, blck, transaction_hash, x, y, direction, price, ts
+        FROM random_sample
+        ORDER BY id ASC;
+    `
+
+	rows, err := db.db.Query(query, count)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching random sorted sample: %w", err)
+	}
+	defer rows.Close()
+
+	var positions []position
+	for rows.Next() {
+		var p position
+		if err := rows.Scan(
+			&p.ID,
+			&p.Block,
+			&p.TransactionHash,
+			&p.X,
+			&p.Y,
+			&p.Direction,
+			&p.Price,
+			&p.Timestamp,
+		); err != nil {
+			return nil, fmt.Errorf("error scanning position: %w", err)
 		}
 		positions = append(positions, p)
 	}
