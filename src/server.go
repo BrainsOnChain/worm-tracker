@@ -86,6 +86,9 @@ func (s *server) positions(w http.ResponseWriter, r *http.Request) {
 //   - recent: contains the 100 most recent positions where the last position is the most recent.
 //   - historical: contains a sampled set of 400 positions from the entire history.
 func (s *server) historicalPositions(w http.ResponseWriter, r *http.Request) {
+	const lastN = 100
+	const sampleN = 400
+
 	latestPosition, err := s.db.getLatestPosition()
 	if err != nil {
 		s.log.Error("failed to fetch latest position", zap.Error(err))
@@ -93,14 +96,14 @@ func (s *server) historicalPositions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	last100, err := s.db.fetchPositions(latestPosition.ID - 100)
+	last100, err := s.db.fetchPositions(latestPosition.ID - lastN)
 	if err != nil {
 		s.log.Error("failed to fetch recent positions", zap.Error(err))
 		http.Error(w, "failed to fetch recent positions", http.StatusInternalServerError)
 		return
 	}
 
-	historical, err := s.db.fetchSample(400)
+	historical, err := s.db.fetchSample(sampleN)
 	if err != nil {
 		s.log.Error("failed to fetch historical positions", zap.Error(err))
 		http.Error(w, "failed to fetch historical positions", http.StatusInternalServerError)
