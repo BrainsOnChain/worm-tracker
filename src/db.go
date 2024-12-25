@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -124,28 +125,48 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 	return positions, nil
 }
 
-// fetchSample return a random sample of count positions. The positions are
-// ordered by id in ascending order.
+// fetchSample returns evenly distributed sample positions, excluding the most recent 100 positions.
+// The positions are ordered by id in ascending order.
 func (db *dbManager) fetchSample(count int) ([]position, error) {
-	const query = /* sql */ `
-        WITH excluded_positions AS (
-            SELECT id FROM positions ORDER BY id DESC LIMIT 100
-        ),
-        random_sample AS (
-            SELECT * FROM positions
-            WHERE id NOT IN (SELECT id FROM excluded_positions)
-            ORDER BY RANDOM()
-            LIMIT ?
-        )
-        SELECT
-			id, blck, transaction_hash, x, y, direction, price, ts
-        FROM random_sample
-        ORDER BY id ASC;
-    `
+	// First, get the stats we need
+	const statsQuery = /* sql */ `
+		WITH excluded_positions AS (
+			SELECT id FROM positions ORDER BY id DESC LIMIT 100
+		)
+		SELECT 
+			MIN(id) as first_id, --first id
+			COUNT(*) as total_count --total count
+		FROM positions
+		WHERE id NOT IN (SELECT id FROM excluded_positions);
+	`
 
-	rows, err := db.db.Query(query, count)
+	var firstID int
+	var totalCount int
+	if err := db.db.QueryRow(statsQuery).Scan(&firstID, &totalCount); err != nil {
+		return nil, fmt.Errorf("error getting position stats: %w", err)
+	}
+
+	// Calculate the interval size
+	interval := float64(totalCount) / float64(count)
+	intervalInt := int(math.Round(interval))
+
+	// Now get the evenly distributed positions
+	const positionsQuery = /* sql */ `
+		WITH excluded_positions AS (
+			SELECT id FROM positions ORDER BY id DESC LIMIT 100
+		)
+		SELECT
+			id, blck, transaction_hash, x, y, direction, price, ts
+		FROM positions
+		WHERE id NOT IN (SELECT id FROM excluded_positions)
+		AND (id - ?) % ? = 0
+		ORDER BY id ASC
+		LIMIT ?;
+	`
+
+	rows, err := db.db.Query(positionsQuery, firstID, intervalInt, count)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching random sorted sample: %w", err)
+		return nil, fmt.Errorf("error fetching evenly distributed sample: %w", err)
 	}
 	defer rows.Close()
 
