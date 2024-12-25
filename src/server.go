@@ -41,14 +41,6 @@ func (s *server) Start() error {
 	})
 
 	// -------------------------------------------------------------------------
-	// App Route
-
-	// This route serves the HTML file in app/ui.html
-	s.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "app/ui.html")
-	})
-
-	// -------------------------------------------------------------------------
 	// Worm Positions Route
 	s.router.Route("/worm", func(r chi.Router) {
 		r.Get("/positions", s.getWormPositions)
