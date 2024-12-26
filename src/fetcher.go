@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"log"
 	"math/big"
 	"math/rand"
 	"strings"
@@ -90,17 +89,42 @@ func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh ch
 		zap.Int("to_query", latestBlock-startBlock),
 	)
 
-	// Fetch up to 50 blocks starting from the last one
-	for i := startBlock; i < latestBlock; i += 50 {
+	// Start with batch size of 50
+	i := startBlock
+	batchSize := 50
+
+	for i < latestBlock {
 		from := int64(i)
-		to := int64(i + 50)
+		to := int64(i + batchSize)
 		if to > int64(latestBlock) {
 			to = int64(latestBlock)
 		}
 
 		cds, err := bf.fetchBlockRange(context.TODO(), from, to)
 		if err != nil {
+			if strings.Contains(err.Error(), "invalid block range") {
+				// If we hit an invalid block range and we're not already at batch size 1
+				if batchSize > 1 {
+					bf.log.Info("switching to single block fetching to find problematic block",
+						zap.Int("from_block", i))
+					batchSize = 1
+					continue
+				} else {
+					// We found the problematic block, log it and skip it
+					bf.log.Warn("found invalid block, skipping",
+						zap.Int("block", i))
+					i++
+					continue
+				}
+			}
 			return fmt.Errorf("failed to fetch block range: %w", err)
+		}
+
+		// If we successfully fetched with batch size 1, try increasing batch size again
+		if batchSize == 1 {
+			batchSize = 50
+			bf.log.Info("resuming batch fetching",
+				zap.Int("at_block", i))
 		}
 
 		for _, cd := range cds {
@@ -108,7 +132,8 @@ func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh ch
 		}
 
 		latestBlockCh <- int(to) // Save the last block checked
-		time.Sleep(5 * time.Second)
+		i += batchSize
+		time.Sleep(1 * time.Second)
 	}
 
 	return nil
@@ -124,7 +149,7 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 	// Fetch logs
 	logs, err := bf.client.FilterLogs(ctx, query)
 	if err != nil {
-		log.Fatalf("Failed to fetch logs: %v", err)
+		return nil, fmt.Errorf("failed to fetch logs: %w", err)
 	}
 	bf.log.Info("fetching block range", zap.Int64("from", from), zap.Int64("to", to), zap.Int("logs", len(logs)))
 
