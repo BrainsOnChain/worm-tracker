@@ -124,28 +124,29 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 	return positions, nil
 }
 
-// fetchSample returns evenly distributed sample positions, excluding the most recent 100 positions.
-// The positions are ordered by id in ascending order.
+// fetchSample returns evenly distributed sample positions, excluding the most
+// recent 100 positions. The positions are ordered by id in ascending order.
 func (db *dbManager) fetchSample(count int) ([]position, error) {
 	const query = /* sql */ `
 		WITH excluded_positions AS (
 			SELECT id FROM positions ORDER BY id DESC LIMIT 100
 		),
 		available_positions AS (
-			SELECT id, blck, transaction_hash, x, y, direction, price, ts,
-				   COUNT(*) OVER () as total_count, 
-				   MIN(id) OVER () as first_id
+			SELECT 
+				id, blck, transaction_hash, x, y, direction, price, ts,
+				COUNT(*) OVER () AS total_count, 
+				MIN(id) OVER () AS first_id
 			FROM positions
 			WHERE id NOT IN (SELECT id FROM excluded_positions)
 		),
-		interval AS (
-			SELECT (total_count / ?) as interval
+		calculated_interval AS (
+			SELECT (total_count / ?) AS interval
 			FROM available_positions
 			LIMIT 1
 		)
 		SELECT id, blck, transaction_hash, x, y, direction, price, ts
-		FROM available_positions
-		WHERE (id - first_id) % interval = 0
+		FROM available_positions, calculated_interval
+		WHERE ((id - first_id) % interval = 0)
 		ORDER BY id ASC
 		LIMIT ?;
 	`
