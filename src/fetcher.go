@@ -163,8 +163,6 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 		if strings.Contains(err.Error(), "invalid block range") {
 			return nil, errInvalidBlockRange
 		}
-
-		log.Error("failed to fetch logs", zap.Error(err))
 		return nil, err // returning here will cause the fetch to return
 	}
 	log.Info("fetching block range", zap.Int("logs", len(logs)))

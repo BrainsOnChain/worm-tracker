@@ -47,8 +47,7 @@ func Run(log *zap.Logger, fetcher *blockFetcher, db *dbManager) error {
 					return
 				}
 
-				err = fetcher.fetch(valueCh, blockCh, latestBlock)
-				if err != nil {
+				if err = fetcher.fetch(valueCh, blockCh, latestBlock); err != nil {
 					log.Error("fetcher error", zap.Error(err))
 				} else {
 					log.Info("fetcher returned, sleeping for 20 seconds")
