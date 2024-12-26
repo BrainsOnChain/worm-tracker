@@ -124,34 +124,42 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 	return positions, nil
 }
 
-// fetchSample returns evenly distributed sample positions, excluding the most
-// recent 100 positions. The positions are ordered by id in ascending order.
+// fetchSample returns evenly distributed sample positions between the first position and
+// the position right before the last 100 positions. It works by:
+// 1. Excluding the last 100 positions (these will be fetched separately)
+// 2. Calculating total available positions and finding the first ID
+// 3. Computing an interval size = total_positions / desired_count
+// 4. Selecting positions where (id - first_id) % interval = 0, which picks evenly spaced positions
+// If there are fewer positions than requested, it returns all available positions.
 func (db *dbManager) fetchSample(count int) ([]position, error) {
 	const query = /* sql */ `
-		WITH excluded_positions AS (
+		WITH excluded_positions as (
 			SELECT id FROM positions ORDER BY id DESC LIMIT 100
 		),
-		available_positions AS (
-			SELECT 
-				id, blck, transaction_hash, x, y, direction, price, ts,
-				COUNT(*) OVER () AS total_count, 
-				MIN(id) OVER () AS first_id
+		available_positions as (
+			SELECT id, blck, transaction_hash, x, y, direction, price, ts,
+				   COUNT(*) OVER () as total_count, 
+				   MIN(id) OVER () as first_id
 			FROM positions
 			WHERE id NOT IN (SELECT id FROM excluded_positions)
 		),
-		calculated_interval AS (
-			SELECT (total_count / ?) AS interval
+		interval_calc as (
+			SELECT CASE 
+				WHEN total_count <= ? THEN 1
+				ELSE CAST((total_count / ?) as INTEGER)
+			END as interval_size
 			FROM available_positions
 			LIMIT 1
 		)
 		SELECT id, blck, transaction_hash, x, y, direction, price, ts
-		FROM available_positions, calculated_interval
-		WHERE ((id - first_id) % interval = 0)
+		FROM available_positions, interval_calc
+		WHERE interval_size > 0
+		AND (id - first_id) % CASE WHEN interval_size = 0 THEN 1 ELSE interval_size END = 0
 		ORDER BY id ASC
 		LIMIT ?;
 	`
 
-	rows, err := db.db.Query(query, count, count)
+	rows, err := db.db.Query(query, count, count, count)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching evenly distributed sample: %w", err)
 	}

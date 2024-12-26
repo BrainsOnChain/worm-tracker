@@ -19,7 +19,9 @@ This repo contains three main components:
 ## The HTTP Server
 The HTTP server is a simple server that listens for requests from the frontend
 and returns the worm data. The html is served from the root `/` and the worm
-data is served from `/worm/positions`.
+data is served from `/worm/positions?id=` where `id` is the id of the last
+position that was fetched, and `/worm/historical` which returns the last 100
+positions and a sample of 400 positions from the entire history.
 
 Worm positions are read from the worm database (SQLite) and returned as a JSON.
 
