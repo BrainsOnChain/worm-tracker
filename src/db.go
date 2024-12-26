@@ -135,10 +135,10 @@ func (db *dbManager) fetchSample(count int) ([]position, error) {
 		SELECT id, blck, transaction_hash, x, y, direction, price, ts
 		FROM positions, bounds
 		WHERE id <= max_id
-		AND (id * ?) % max_id < ?
+		AND id >= 1
+		AND ((id - 1) * ?) % (max_id - 1) < ?
 		ORDER BY id ASC;
 	`
-
 	rows, err := db.db.Query(query, count, count)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching evenly distributed sample: %w", err)
