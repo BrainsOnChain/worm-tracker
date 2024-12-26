@@ -126,7 +126,7 @@ func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh ch
 			bf.log.Info("resuming batch fetching",
 				zap.Int("at_block", i))
 		}
-    
+
 		for _, cd := range cds {
 			contractDataCh <- cd
 		}
@@ -139,7 +139,7 @@ func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh ch
 	return nil
 }
 
-func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) []contractData {
+func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]contractData, error) {
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(from),
 		ToBlock:   big.NewInt(to),
@@ -151,8 +151,8 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) []c
 	// Fetch logs
 	logs, err := bf.client.FilterLogs(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch logs: %w", err)
-
+		log.Error("failed to fetch logs", zap.Error(err))
+		return nil, err
 	}
 	log.Info("fetching block range", zap.Int("logs", len(logs)))
 
@@ -191,7 +191,7 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) []c
 		cds = append(cds, cd)
 	}
 
-	return cds
+	return cds, nil
 }
 
 func (bf *blockFetcher) getLatestBlock(ctx context.Context) (int, error) {
