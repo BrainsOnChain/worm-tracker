@@ -33,8 +33,5 @@ WORKDIR /root/
 # Copy the Pre-built binary file
 COPY --from=builder /app/bin/myapp .
 
-# Copy the HTML file (or static assets) for runtime
-# COPY app/ui.html /root/app/ui.html
-
 # Command to run the executable
 CMD ["./myapp"]

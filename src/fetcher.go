@@ -3,6 +3,7 @@ package src
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -72,6 +73,11 @@ func (bf *blockFetcher) mockFetch() (contractData, error) {
 	}, nil
 }
 
+// fetch fetches the contract data from the blockchain and sends it to the
+// contractData channel. It also sends the latest block checked to the
+// latestBlock channel. It does so in batches of 50 blocks. However, if it
+// encounters an invalid block range, it will switch to single block fetching to
+// find the problematic block.
 func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh chan int, startBlock int) error {
 	if startBlock == 0 {
 		startBlock = initialBlock
@@ -94,50 +100,53 @@ func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh ch
 	batchSize := 50
 
 	for i < latestBlock {
-		from := int64(i)
-		to := int64(i + batchSize)
-		if to > int64(latestBlock) {
-			to = int64(latestBlock)
+		from, to := i, i+batchSize
+		if to > latestBlock {
+			to = latestBlock
 		}
 
-		cds, err := bf.fetchBlockRange(context.TODO(), from, to)
+		cds, err := bf.fetchBlockRange(context.Background(), int64(from), int64(to))
 		if err != nil {
-			if strings.Contains(err.Error(), "invalid block range") {
-				// If we hit an invalid block range and we're not already at batch size 1
+			if errors.Is(err, errInvalidBlockRange) {
+				// If we hit an invalid block range and we're not already at
+				// batch size 1
 				if batchSize > 1 {
-					bf.log.Info("switching to single block fetching to find problematic block",
-						zap.Int("from_block", i))
+					bf.log.Info(
+						"switching to single block fetching to find problematic block",
+						zap.Int("from_block", i),
+					)
 					batchSize = 1
-					continue
+					continue // Retry fetching with batch size 1
 				} else {
 					// We found the problematic block, log it and skip it
-					bf.log.Warn("found invalid block, skipping",
-						zap.Int("block", i))
+					bf.log.Warn("found invalid block, skipping", zap.Int("block", i))
 					i++
-					continue
+					continue // Skip to next block
 				}
 			}
 			return fmt.Errorf("failed to fetch block range: %w", err)
 		}
 
-		// If we successfully fetched with batch size 1, try increasing batch size again
+		// If we successfully fetched with batch size 1, try increasing batch
+		// size again
 		if batchSize == 1 {
 			batchSize = 50
-			bf.log.Info("resuming batch fetching",
-				zap.Int("at_block", i))
+			bf.log.Info("resuming batch fetching", zap.Int("at_block", i))
 		}
 
 		for _, cd := range cds {
 			contractDataCh <- cd
 		}
 
-		latestBlockCh <- int(to) // Save the last block checked
+		latestBlockCh <- to // Save the last block checked
 		i += batchSize
 		time.Sleep(1 * time.Second)
 	}
 
 	return nil
 }
+
+var errInvalidBlockRange = errors.New("invalid block range")
 
 func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]contractData, error) {
 	query := ethereum.FilterQuery{
@@ -151,8 +160,12 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 	// Fetch logs
 	logs, err := bf.client.FilterLogs(ctx, query)
 	if err != nil {
+		if strings.Contains(err.Error(), "invalid block range") {
+			return nil, errInvalidBlockRange
+		}
+
 		log.Error("failed to fetch logs", zap.Error(err))
-		return nil, err
+		return nil, err // returning here will cause the fetch to return
 	}
 	log.Info("fetching block range", zap.Int("logs", len(logs)))
 
