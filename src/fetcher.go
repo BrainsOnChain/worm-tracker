@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"log"
 	"math/big"
 	"math/rand"
 	"strings"
@@ -98,11 +97,7 @@ func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh ch
 			to = int64(latestBlock)
 		}
 
-		cds, err := bf.fetchBlockRange(context.TODO(), from, to)
-		if err != nil {
-			return fmt.Errorf("failed to fetch block range: %w", err)
-		}
-
+		cds := bf.fetchBlockRange(context.TODO(), from, to)
 		for _, cd := range cds {
 			contractDataCh <- cd
 		}
@@ -114,19 +109,21 @@ func (bf *blockFetcher) fetch(contractDataCh chan contractData, latestBlockCh ch
 	return nil
 }
 
-func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]contractData, error) {
+func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) []contractData {
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(from),
 		ToBlock:   big.NewInt(to),
 		Addresses: []common.Address{contractAddress},
 	}
 
+	log := bf.log.With(zap.Int64("from", from), zap.Int64("to", to))
+
 	// Fetch logs
 	logs, err := bf.client.FilterLogs(ctx, query)
 	if err != nil {
-		log.Fatalf("Failed to fetch logs: %v", err)
+		log.Sugar().Warnf("Failed to fetch logs: %v", err)
 	}
-	bf.log.Info("fetching block range", zap.Int64("from", from), zap.Int64("to", to), zap.Int("logs", len(logs)))
+	log.Info("fetching block range", zap.Int("logs", len(logs)))
 
 	cds := make([]contractData, 0, len(logs))
 
@@ -142,7 +139,7 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 		}{}
 
 		if err := bf.abi.UnpackIntoInterface(&event, "WormStateUpdated", vLog.Data); err != nil {
-			bf.log.Sugar().Warnf("failed to unpack log data: %w", err)
+			log.Sugar().Warnf("failed to unpack log data: %w", err)
 			continue
 		}
 
@@ -156,14 +153,14 @@ func (bf *blockFetcher) fetchBlockRange(ctx context.Context, from, to int64) ([]
 		}
 
 		if cd.leftMuscle == 0 && cd.rightMuscle == 0 {
-			bf.log.Info("zero muscle movements, ignoring", zap.Int("block", cd.block))
+			log.Info("zero muscle movements, ignoring", zap.Int("block", cd.block))
 			continue
 		}
 
 		cds = append(cds, cd)
 	}
 
-	return cds, nil
+	return cds
 }
 
 func (bf *blockFetcher) getLatestBlock(ctx context.Context) (int, error) {
