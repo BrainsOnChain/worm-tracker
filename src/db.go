@@ -126,6 +126,7 @@ func (db *dbManager) fetchPositions(id int) ([]position, error) {
 
 // fetchSample returns evenly distributed positions from ID 1 up to (lastId -
 // 100). The last 100 positions are excluded as they will be fetched separately.
+// note: the website doesnt work until there are 100 positions in the database
 func (db *dbManager) fetchSample(count int) ([]position, error) {
 	const query = /* sql */ `
 		WITH bounds as (

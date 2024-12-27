@@ -26,10 +26,10 @@ var (
 	abiStr string
 
 	// Contract address
-	contractAddress = common.HexToAddress("0xbc406E6A1592d3b3c2cd20B015da5A7b3983DAC0")
+	contractAddress = common.HexToAddress("0x385B69Ef54332E6D3f00Ecf3384F890183e511F8")
 
 	// Start Block
-	initialBlock = 14187700
+	initialBlock = 14419337
 )
 
 type contractData struct {

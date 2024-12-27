@@ -49,6 +49,7 @@ func run(log *zap.Logger) error {
 	if dbPath == "" {
 		dbPath = "./worm-tracker.sqlite" // Fallback for local
 	}
+	log.Info("using database path", zap.String("path", dbPath))
 
 	db, err := src.NewDBManager(dbPath)
 	if err != nil {
