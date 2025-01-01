@@ -83,12 +83,7 @@ func (db *dbManager) savePosition(p position) error {
 			(?, ?, ?, ?, ?, ?, ?)
 	`
 
-	stmt, err := db.db.Prepare(q)
-	if err != nil {
-		return fmt.Errorf("error preparing insert stmt: %w", err)
-	}
-
-	if _, err = stmt.Exec(p.Block, p.TransactionHash, p.X, p.Y, p.Direction, p.Price, p.Timestamp); err != nil {
+	if _, err := db.db.Exec(q, p.Block, p.TransactionHash, p.X, p.Y, p.Direction, p.Price, p.Timestamp); err != nil {
 		return fmt.Errorf("error executing position insert: %w", err)
 	}
 
@@ -192,12 +187,7 @@ func (db *dbManager) saveBlockChecked(blck int) error {
 		INSERT INTO blocks_checked (blck) VALUES (?);
 	`
 
-	stmt, err := db.db.Prepare(q)
-	if err != nil {
-		return fmt.Errorf("error preparing insert stmt: %w", err)
-	}
-
-	if _, err = stmt.Exec(blck); err != nil {
+	if _, err := db.db.Exec(q, blck); err != nil {
 		// Handle unique constraint violation
 		if err.Error() == "UNIQUE constraint failed: blocks_checked.blck" {
 			return errUniqueConstraintViolation
