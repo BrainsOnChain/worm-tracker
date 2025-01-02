@@ -13,17 +13,83 @@ This project requires the following:
 # Overview
 This repo contains three main components:
 1. The HTTP server
-2. The Hyperliquid Block Fetcher
-2. The Worm Tracker Frontend
+2. The Storage Layer
+3. The Hyperliquid Block Fetcher
 
 ## The HTTP Server
 The HTTP server is a simple server that listens for requests from the frontend
-and returns the worm data. The html is served from the root `/` and the worm
-data is served from `/worm/positions?id=` where `id` is the id of the last
-position that was fetched, and `/worm/historical` which returns the last 100
-positions and a sample of 400 positions from the entire history.
+and returns the worm data. It consists of two endpoints.
 
-Worm positions are read from the worm database (SQLite) and returned as a JSON.
+### `/worm/positions?id=`
+This endpoint returns the worm data as a JSON. The `id` parameter is the id of
+the last position that the client knows of. The server will return all positions
+that have an id greater than the `id` parameter with a max of 100 positions.
+
+Response Sample 
+```json
+[
+    {
+        "id": 1,
+        "blockNumber": 1,
+        "transactionHash": "0x1234",
+        "x": 0.0,
+        "y": 0.0,
+        "direction": 0.0,
+        "price": 0.0,
+        "timestamp": "2021-10-10T00:00:00Z"
+    },
+    {
+        ...
+    }
+]
+```
+
+### `/worm/historical`
+This endpoint is used to fetch a sample of historical postions. It returns two
+arrays of positions. First is the `recent` which returns the last 100 positions
+and the second is the `historical` which is a uniformly distributed sample of
+400 positions from the entire history.
+
+Response Sample
+```json
+{
+    "recent": [
+        {
+            "id": 1,
+            "blockNumber": 1,
+            "transactionHash": "0x1234",
+            "x": 0.0,
+            "y": 0.0,
+            "direction": 0.0,
+            "price": 0.0,
+            "timestamp": "2021-10-10T00:00:00Z"
+        },
+        {
+            ...
+        }
+    ],
+    "historical": [
+        {
+            "id": 1,
+            "blockNumber": 1,
+            "transactionHash": "0x1234",
+            "x": 0.0,
+            "y": 0.0,
+            "direction": 0.0,
+            "price": 0.0,
+            "timestamp": "2021-10-10T00:00:00Z"
+        },
+        {
+            ...
+        }
+    ]
+}
+```
+
+## Storage Layer
+Currently this application uses SQLite as the storage layer. The worm data is
+stored in a single `positions` table. We also track the last block number that
+we have fetched data from in the `last_block` table.
 
 ## The Hyperliquid Block Fetcher
 The Hyperliquid Block Fetcher is background runner that listens for new blocks
@@ -31,17 +97,12 @@ on the Hyperliquid blockchain. When a new block is found that contains logs from
 the DeepWorms contract, the fetcher will parse the logs and save the worm data
 to the worm database (SQLite).
 
-## The Worm Tracker Frontend
-The Worm Tracker Frontend is a simple web app that displays the worm data in a
-2d plane. The worm data is fetched from the HTTP server and displayed as a
-series of points and lines.
-
 # Running the Project
 To run the project, you will need to be able to run a Go server.
 
 1. Clone the repo
 2. Run the server with `go run .`
-3. Open the frontend in a browser at `http://localhost:8080`
+3. cURL the server to get the worm data
 
 
 
